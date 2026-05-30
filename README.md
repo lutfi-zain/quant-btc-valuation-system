@@ -1,6 +1,6 @@
 <div align="center">
   
-  # 📈 BTC Cycle Valuation System
+  # 📈 Quant BTC Cycle Valuation System
   
   **A quantitative and statistical valuation engine designed to identify Bitcoin cycle peaks, troughs, and mid-cycle phases.**
 
@@ -14,76 +14,87 @@
   <br />
 </div>
 
-## 🎯 System Goal
+## 📖 Project Description
 
-The system aggregates metrics across on-chain data, sentiment indicators, and technical price action to output a **master valuation oscillator** bounded from `-2` (extreme low value / undervalued) to `+2` (extreme high value / overvalued).
+The BTC Cycle Valuation System is a quantitative engine that aggregates metrics across on-chain data, sentiment indicators, and technical price action. Its primary purpose is to output a **master valuation oscillator** bounded from `-2` (extreme low value / undervalued) to `+2` (extreme high value / overvalued), giving users a clear view of Bitcoin's macroeconomic cycle positioning.
 
-## 🏗 System Architecture
+## 💻 Technology Stack
 
-The project is built on a modular, multi-language stack to optimize for both rigorous data science and high-performance web delivery:
+The project leverages a high-performance, multi-language stack:
 
-| Layer | Technology | Purpose |
-| --- | --- | --- |
-| **Quant / Data** | `Python` | Data scraping, on-chain metric calculations, and statistical modeling. |
-| **Backend** | `Hono` + `Bun` | Fast, lightweight API service. |
-| **Frontend** | `Vite` + `React` | Interactive dashboard for real-time charting and data visualization. |
-| **Database** | `SQLite` | Local native storage for time-series metrics, valuation models, and raw data. |
+* **Quant / Data:** `Python 3.10+` for data scraping, on-chain metric calculations, and statistical modeling.
+* **Backend:** `Hono` API framework running on the `Bun` runtime.
+* **Frontend:** `React` SPA built with `Vite`, running on the `Bun` runtime.
+* **Database:** `SQLite` for native, local storage of time-series metrics.
+* **Package Management:** `Bun` for JavaScript/TypeScript, `pip` for Python.
 
-## ⚙️ Core Data Workflow
+## 🏗 Project Architecture
 
-The system's data modeling adheres strictly to the following pipeline rules:
+The architecture is fully decoupled, isolating the heavy statistical modeling from the fast web delivery:
 
-1. **Raw Data Ingestion:** Raw data is fetched from online sources and stored directly into SQLite. Every data source exposes a callable function to either fetch fresh delta data incrementally or rebuild the entire historical dataset from scratch.
-2. **Component Modeling:** Each raw data stream serves as a system "component". Components are manipulated via statistical workflows to normalize their metrics onto the standard `-2` to `+2` scale.
-3. **The "Playground" Rule (1 Component = 1 Script):** Each component is housed in its own dedicated Python script. This ensures researchers have an isolated playground to visualize the data, tweak parameters (such as window lengths or moving averages), and experiment with statistical transformations.
+1. **Raw Data Ingestion:** Raw data is fetched online and stored intact in SQLite. Data sources must expose functions to fetch incremental delta data or rebuild datasets from 0.
+2. **Component Modeling:** Each raw metric is a "component" manipulated via statistical workflows to normalize it onto the `-2` to `+2` scale.
+3. **The "Playground" Rule:** One Component = One Python Script. Each metric has its own dedicated script for researchers to visualize data, tweak window lengths, and experiment with transformations.
 
-## 🚀 Development Setup
-
-> [!NOTE]  
-> This project enforces [Bun](https://bun.sh/) for all Node/JS/TS operations and standard `pip` for Python.
+## 🚀 Getting Started
 
 ### Prerequisites
+* [Bun](https://bun.sh/) (latest)
+* Python 3.10+
+* Git
 
-- [Bun](https://bun.sh/) (latest)
-- Python 3.10+
-- Git
-
-### Installation
+### Installation & Setup
 
 1. **Install JavaScript/TypeScript dependencies (Frontend & Backend):**
    ```bash
    bun install
    ```
-
 2. **Install Python dependencies (Quant Pipeline):**
    ```bash
    python -m pip install -r requirements.txt
    ```
 
+## 📁 Project Structure
+
+* `/quant`: Python modules for data scraping, on-chain metric calculations, and the Pytest suite.
+* `/backend`: Hono-based API service serving stats/valuation results.
+* `/frontend`: Vite + React SPA presenting interactive charts and dashboards.
+* `/database`: SQLite schemas, migrations, and database seeders.
+* `/openspec`: Project constraints, technical designs, and task specifications.
+
+## ✨ Key Features
+
+* **Master Oscillator:** Normalizes disparate metrics (MVRV Z-Score, Puell Multiple, Fear & Greed) into a single bounded `-2` to `+2` score.
+* **Modular Data Ingestion:** Safely rebuild historical datasets from scratch or pull live incremental data.
+* **Isolated Playgrounds:** Granular Python scripts for tweaking model parameters without affecting the main API.
+
+## 🔄 Development Workflow
+
+This repository strictly follows **Spec-Driven Development** using [OpenSpec](https://openspec.pro/):
+* All features begin as proposals in `openspec/changes/<change-name>/proposal.md`.
+* Specifications and architectural designs are drafted and approved *before* implementation tasks are generated.
+* **Branching Strategy:** Use `feature/<name>` for new feature branches.
+* **Git Rules:** `git push --force` is prohibited. Always `git pull --rebase` before pushing. Conventional Commits are mandatory.
+
+## 📏 Coding Standards
+
+* **Serialization Rules:** Pydantic v2 is used. Underscore-prefixed fields (e.g., `_fallback`) are strictly forbidden in API response models to prevent serialization issues.
+* **API Payloads:** API responses must align exactly with the specs. Alias fields must be mapped to guarantee backward compatibility.
+* **Ubiquitous Language:** Code logic must strictly use defined terminology: `ValuationOscillator`, `ValuationMetric`, `OnChainMetric`, `SentimentIndicator`, `TechnicalIndicator`, and `BTCValuationModel`.
+
 ## 🧪 Testing
 
-Reliability is enforced via automated test suites across the stack.
+Testing is mandatory for all new features.
+* **Python (Fast Validation):** `python -m pytest -xvs`
+* **Python (Full Coverage):** `python -m pytest --cov`
+* **JS/TS (Frontend/Backend):** `bun test`
 
-**Python (Fast validation):**
-```bash
-python -m pytest -xvs
-```
+## 🤝 Contributing
 
-**Python (Full coverage):**
-```bash
-python -m pytest --cov
-```
+Contributions must adhere to the guardrails defined in [AGENTS.md](AGENTS.md) and [openspec/config.yaml](openspec/config.yaml).
+* **Auto-Verification:** Implementers must run E2E `curl` verification against the local Hono server and spawn parallel reviewer agents to verify functionality against the spec before marking tasks as complete.
+* **Security:** Never hardcode API keys; ensure graceful configuration loading. Do not expose raw SQLite database endpoints directly to the public web.
 
-**JS/TS (Frontend & Backend):**
-```bash
-bun test
-```
+## 📄 License
 
-## 🧠 Spec-Driven Development
-
-This repository is governed by [OpenSpec](https://openspec.pro/) to ensure predictable, spec-driven development and robust AI integration. 
-
-All technical designs, implementation tasks, and system specifications are documented inside the `openspec/` directory. AI agents and developers must consult `AGENTS.md` and `openspec/config.yaml` to ensure they strictly follow the system architecture and ubiquitous language.
-
-> [!IMPORTANT]  
-> Force pushing (`git push --force` or `--force-with-lease`) is strictly prohibited in this repository. Always rebase your local branch (`git pull --rebase`) before pushing.
+*License information not yet specified.*
