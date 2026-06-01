@@ -53,6 +53,56 @@ def init_db(db_path: str = DB_PATH) -> None:
             t_plus_2 REAL
         )
     ''')
+
+    # Create the audit_indicator_stats table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_indicator_stats (
+            metric_name TEXT NOT NULL,
+            run_date TEXT NOT NULL,
+            count INTEGER,
+            mean REAL,
+            std REAL,
+            skewness REAL,
+            kurtosis REAL,
+            p2_5 REAL,
+            p5 REAL,
+            p25 REAL,
+            p50 REAL,
+            p75 REAL,
+            p95 REAL,
+            p97_5 REAL,
+            min_val REAL,
+            max_val REAL,
+            pct_at_plus2 REAL,
+            pct_at_minus2 REAL,
+            PRIMARY KEY (metric_name, run_date)
+        )
+    ''')
+
+    # Create the audit_correlation_matrix table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_correlation_matrix (
+            metric_a TEXT NOT NULL,
+            metric_b TEXT NOT NULL,
+            run_date TEXT NOT NULL,
+            pearson REAL,
+            spearman REAL,
+            PRIMARY KEY (metric_a, metric_b, run_date)
+        )
+    ''')
+
+    # Create the audit_composite_params table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_composite_params (
+            run_date TEXT NOT NULL PRIMARY KEY,
+            raw_min REAL,
+            raw_max REAL,
+            raw_p2_5 REAL,
+            raw_p50 REAL,
+            raw_p97_5 REAL,
+            rescale_method TEXT DEFAULT 'percentile_piecewise'
+        )
+    ''')
     
     conn.commit()
     conn.close()

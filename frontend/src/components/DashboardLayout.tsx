@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { CompositeChart } from './CompositeChart';
 import { MetricGrid } from './MetricGrid';
 import { MetricDetail } from './MetricDetail';
+import { AuditPanel } from './AuditPanel';
 import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs, fetchBtcOhlc } from '../api/client';
 import type { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 
@@ -74,6 +75,17 @@ export const DashboardLayout: React.FC = () => {
   }, [loadDashboardData]);
 
   const handleSelectMetric = async (name: string) => {
+    if (name === '__dashboard__') {
+      setActiveMetric(null);
+      setDetailData([]);
+      return;
+    }
+    if (name === '__audit__') {
+      setActiveMetric('__audit__');
+      setDetailData([]);
+      return;
+    }
+
     setActiveMetric(name);
     setDetailLoading(true);
     try {
@@ -148,28 +160,34 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         <div className="dashboard-body">
-          {/* 1. Composite Master Chart */}
-          <CompositeChart data={compositeData} />
+          {activeMetric === '__audit__' ? (
+            <AuditPanel />
+          ) : (
+            <>
+              {/* 1. Composite Master Chart */}
+              <CompositeChart data={compositeData} />
 
-          {/* 2. Expanded Detail Panel */}
-          {activeMetric && activeSummary && (
-            <MetricDetail
-              metric={activeSummary}
-              data={detailData}
-              config={activeConfig}
-              btcOhlcData={btcOhlc}
-              loading={detailLoading}
-              onClose={handleCloseDetail}
-            />
+              {/* 2. Expanded Detail Panel */}
+              {activeMetric && activeMetric !== '__audit__' && activeSummary && (
+                <MetricDetail
+                  metric={activeSummary}
+                  data={detailData}
+                  config={activeConfig}
+                  btcOhlcData={btcOhlc}
+                  loading={detailLoading}
+                  onClose={handleCloseDetail}
+                />
+              )}
+
+              {/* 3. Grid of component cards */}
+              <MetricGrid
+                metrics={metrics}
+                sparklineData={sparklineData}
+                activeMetric={activeMetric}
+                onSelectMetric={handleSelectMetric}
+              />
+            </>
           )}
-
-          {/* 3. Grid of component cards */}
-          <MetricGrid
-            metrics={metrics}
-            sparklineData={sparklineData}
-            activeMetric={activeMetric}
-            onSelectMetric={handleSelectMetric}
-          />
         </div>
       </main>
     </div>

@@ -117,6 +117,7 @@ test("GET /api/composite", async () => {
   expect(body[0]).toEqual({
     date: "2023-01-01",
     composite_value: 0.3,
+    raw_composite_value: 0.3,
     component_count: 2,
     btc_price: 20000.0
   });
@@ -176,4 +177,60 @@ test("POST and GET /api/metrics/config", async () => {
   const getNoneRes = await app.request("/api/metrics/config/non_existent");
   expect(getNoneRes.status).toBe(200);
   expect(await getNoneRes.json()).toBeNull();
+});
+
+test("GET /api/audit/summary (404 when no data)", async () => {
+  const res = await app.request("/api/audit/summary");
+  expect(res.status).toBe(404);
+  const body = await res.json();
+  expect(body.error).toContain("No audit data available");
+});
+
+test("GET /api/audit/summary (200 with data) and rescaled composite", async () => {
+  const db = new Database(TEST_DB_PATH);
+  
+  const runDate = "2026-06-01";
+  
+  // Insert mock audit stats
+  db.run(`
+    INSERT INTO audit_indicator_stats 
+    (metric_name, run_date, count, mean, std, skewness, kurtosis, p2_5, p5, p25, p50, p75, p95, p97_5, min_val, max_val, pct_at_plus2, pct_at_minus2)
+    VALUES ('aviv_ratio', ?, 100, 0.1, 0.5, 0.0, 0.0, -1.0, -0.8, -0.2, 0.0, 0.3, 0.8, 1.0, -1.5, 1.5, 0.02, 0.01)
+  `, [runDate]);
+  
+  // Insert mock correlation
+  db.run(`
+    INSERT INTO audit_correlation_matrix (metric_a, metric_b, run_date, pearson, spearman)
+    VALUES ('aviv_ratio', 'mvrv_z', ?, 0.88, 0.87)
+  `, [runDate]);
+  
+  // Insert mock composite params
+  db.run(`
+    INSERT INTO audit_composite_params (run_date, raw_min, raw_max, raw_p2_5, raw_p50, raw_p97_5, rescale_method)
+    VALUES (?, -0.8, 0.9, -0.5, 0.1, 0.7, 'percentile_piecewise')
+  `, [runDate]);
+  
+  db.close();
+
+  // Test /api/audit/summary
+  const res = await app.request("/api/audit/summary");
+  expect(res.status).toBe(200);
+  
+  const body = await res.json();
+  expect(body.run_date).toBe(runDate);
+  expect(body.composite_params.raw_p50).toBe(0.1);
+  expect(body.indicator_stats[0].metric_name).toBe("aviv_ratio");
+  expect(body.correlations[0].metric_b).toBe("mvrv_z");
+
+  // Test /api/composite with rescaling applied
+  // raw average was 0.3 (above raw_p50=0.1, below raw_p97_5=0.7)
+  // expected rescaled = 0.0 + 2.0 * (0.3 - 0.1) / (0.7 - 0.1) = 0.6666...
+  const compRes = await app.request("/api/composite");
+  expect(compRes.status).toBe(200);
+  const compBody = await compRes.json() as any[];
+  
+  const row2023 = compBody.find(r => r.date === "2023-01-01");
+  expect(row2023).toBeDefined();
+  expect(row2023.raw_composite_value).toBe(0.3);
+  expect(Math.abs(row2023.composite_value - 0.6666666666666666)).toBeLessThan(1e-7);
 });

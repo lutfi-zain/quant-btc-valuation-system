@@ -37,6 +37,53 @@ db.run(`
   )
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS audit_indicator_stats (
+    metric_name TEXT NOT NULL,
+    run_date TEXT NOT NULL,
+    count INTEGER,
+    mean REAL,
+    std REAL,
+    skewness REAL,
+    kurtosis REAL,
+    p2_5 REAL,
+    p5 REAL,
+    p25 REAL,
+    p50 REAL,
+    p75 REAL,
+    p95 REAL,
+    p97_5 REAL,
+    min_val REAL,
+    max_val REAL,
+    pct_at_plus2 REAL,
+    pct_at_minus2 REAL,
+    PRIMARY KEY (metric_name, run_date)
+  )
+`);
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS audit_correlation_matrix (
+    metric_a TEXT NOT NULL,
+    metric_b TEXT NOT NULL,
+    run_date TEXT NOT NULL,
+    pearson REAL,
+    spearman REAL,
+    PRIMARY KEY (metric_a, metric_b, run_date)
+  )
+`);
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS audit_composite_params (
+    run_date TEXT NOT NULL PRIMARY KEY,
+    raw_min REAL,
+    raw_max REAL,
+    raw_p2_5 REAL,
+    raw_p50 REAL,
+    raw_p97_5 REAL,
+    rescale_method TEXT DEFAULT 'percentile_piecewise'
+  )
+`);
+
 // Metric categories mapping
 const METRIC_CATEGORIES: Record<string, string> = {
   aviv_ratio: 'fundamental',
@@ -143,6 +190,19 @@ app.get('/api/metrics/configs', (c) => {
   }
 });
 
+function rescale(rawVal: number, params: { raw_p2_5: number, raw_p50: number, raw_p97_5: number }): number {
+  const { raw_p2_5, raw_p50, raw_p97_5 } = params;
+  if (rawVal <= raw_p2_5) return -2.0;
+  if (rawVal >= raw_p97_5) return 2.0;
+  if (rawVal < raw_p50) {
+    const denom = raw_p50 - raw_p2_5;
+    return Math.abs(denom) < 1e-9 ? -2.0 : -2.0 + 2.0 * (rawVal - raw_p2_5) / denom;
+  } else {
+    const denom = raw_p97_5 - raw_p50;
+    return Math.abs(denom) < 1e-9 ? 2.0 : 0.0 + 2.0 * (rawVal - raw_p50) / denom;
+  }
+}
+
 // GET /api/composite — Get composite oscillator values
 app.get('/api/composite', (c) => {
   try {
@@ -175,11 +235,100 @@ app.get('/api/composite', (c) => {
     `;
     
     const stmt = db.query(queryStr);
-    const results = stmt.all(...params);
-    return c.json(results);
+    const results = stmt.all(...params) as any[];
+
+    // Fetch latest composite params for rescaling
+    let compParams: { raw_p2_5: number, raw_p50: number, raw_p97_5: number } | null = null;
+    try {
+      const paramsStmt = db.query(`
+        SELECT raw_p2_5, raw_p50, raw_p97_5 
+        FROM audit_composite_params 
+        ORDER BY run_date DESC 
+        LIMIT 1
+      `);
+      const row = paramsStmt.get() as any;
+      if (row) {
+        compParams = {
+          raw_p2_5: row.raw_p2_5,
+          raw_p50: row.raw_p50,
+          raw_p97_5: row.raw_p97_5
+        };
+      }
+    } catch (err) {
+      console.warn("Could not fetch composite rescaling parameters:", err);
+    }
+
+    const mappedResults = results.map(row => {
+      const rawVal = row.composite_value;
+      const rescaledVal = compParams ? rescale(rawVal, compParams) : rawVal;
+      return {
+        date: row.date,
+        composite_value: rescaledVal,
+        raw_composite_value: rawVal,
+        component_count: row.component_count,
+        btc_price: row.btc_price
+      };
+    });
+    
+    return c.json(mappedResults);
   } catch (err) {
     console.error('Error fetching composite metrics:', err);
     return c.json({ error: 'Failed to retrieve composite metrics' }, 500);
+  }
+});
+
+// GET /api/audit/summary — Get latest statistical audit summary
+app.get('/api/audit/summary', (c) => {
+  try {
+    // 1. Get latest run date
+    let latestDateRow: { max_date: string | null } | undefined;
+    try {
+      latestDateRow = db.query(`
+        SELECT MAX(run_date) as max_date 
+        FROM audit_composite_params
+      `).get() as any;
+    } catch (err) {
+      console.warn("Could not query latest audit run date:", err);
+    }
+    
+    const runDate = latestDateRow?.max_date;
+    
+    if (!runDate) {
+      return c.json({ error: "No audit data available. Run the audit pipeline first." }, 404);
+    }
+    
+    // 2. Fetch composite params
+    const compositeParams = db.query(`
+      SELECT raw_min, raw_max, raw_p2_5, raw_p50, raw_p97_5, rescale_method
+      FROM audit_composite_params
+      WHERE run_date = ?
+    `).get(runDate);
+    
+    // 3. Fetch indicator stats
+    const indicatorStats = db.query(`
+      SELECT metric_name, count, mean, std, skewness, kurtosis,
+             p2_5, p5, p25, p50, p75, p95, p97_5, min_val, max_val,
+             pct_at_plus2, pct_at_minus2
+      FROM audit_indicator_stats
+      WHERE run_date = ?
+    `).all(runDate);
+    
+    // 4. Fetch correlations
+    const correlations = db.query(`
+      SELECT metric_a, metric_b, pearson, spearman
+      FROM audit_correlation_matrix
+      WHERE run_date = ?
+    `).all(runDate);
+    
+    return c.json({
+      run_date: runDate,
+      composite_params: compositeParams,
+      indicator_stats: indicatorStats,
+      correlations: correlations
+    });
+  } catch (err) {
+    console.error('Error fetching audit summary:', err);
+    return c.json({ error: 'Failed to retrieve audit summary' }, 500);
   }
 });
 

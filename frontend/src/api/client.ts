@@ -1,6 +1,12 @@
-import type { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
+import type { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig, BtcOhlcData, AuditSummary } from '../types/metrics';
 
 const API_BASE = '/api';
+
+export async function fetchAuditSummary(): Promise<AuditSummary> {
+  const res = await fetch(`${API_BASE}/audit/summary`);
+  if (!res.ok) throw new Error('Failed to fetch statistical audit summary');
+  return res.json();
+}
 
 export async function fetchMetrics(): Promise<MetricSummary[]> {
   const res = await fetch(`${API_BASE}/metrics`);

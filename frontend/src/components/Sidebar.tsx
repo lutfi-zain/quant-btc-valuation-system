@@ -48,6 +48,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ metrics, activeMetric, onSelec
         <div className="brand-sub">OSCILLATOR v2.0</div>
       </div>
       
+      <div className="sidebar-global-nav" style={{ padding: '1rem 1.25rem 0.5rem 1.25rem', borderBottom: '1px solid var(--border-subtle)' }}>
+        <button
+          onClick={() => onSelectMetric('__dashboard__')}
+          className={`metric-nav-item ${activeMetric === null || activeMetric === '__dashboard__' ? 'active' : ''}`}
+          style={{ paddingLeft: '0.5rem', width: '100%', borderRadius: '4px' }}
+        >
+          <span className="metric-nav-name">📊 DASHBOARD</span>
+        </button>
+        <button
+          onClick={() => onSelectMetric('__audit__')}
+          className={`metric-nav-item ${activeMetric === '__audit__' ? 'active' : ''}`}
+          style={{ paddingLeft: '0.5rem', marginTop: '0.5rem', width: '100%', borderRadius: '4px' }}
+        >
+          <span className="metric-nav-name">🛡️ SYSTEM_AUDIT</span>
+        </button>
+      </div>
+
       <nav className="sidebar-nav">
         {categories.map(category => {
           const categoryMetrics = getMetricsByCategory(category.id);
