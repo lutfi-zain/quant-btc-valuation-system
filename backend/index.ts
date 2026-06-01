@@ -38,6 +38,16 @@ db.run(`
 `);
 
 db.run(`
+  CREATE TABLE IF NOT EXISTS btc_ohlc (
+    date TEXT PRIMARY KEY,
+    open REAL,
+    high REAL,
+    low REAL,
+    close REAL
+  )
+`);
+
+db.run(`
   CREATE TABLE IF NOT EXISTS audit_indicator_stats (
     metric_name TEXT NOT NULL,
     run_date TEXT NOT NULL,
@@ -217,6 +227,7 @@ app.get('/api/composite', (c) => {
         MAX(btc_price) as btc_price
       FROM timeseries_metrics
       WHERE normalized_value IS NOT NULL
+        AND (date <= (SELECT MAX(date) FROM btc_ohlc) OR (SELECT COUNT(*) FROM btc_ohlc) = 0)
     `;
     
     const params: any[] = [];
