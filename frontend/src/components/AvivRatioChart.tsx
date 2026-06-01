@@ -346,13 +346,12 @@ export const AvivRatioChart = () => {
   useEffect(() => {
     if (!rawSeriesRef.current || !oscSeriesRef.current || avivDataRef.current.length === 0) return;
 
-    // Update Price Lines on Raw Chart
     const lineConfigs = [
-      { key: 't_plus_2', price: Number(thresholds.t_plus_2) || 0, color: '#f43f5e', title: 'Peak (-2SD)' },
-      { key: 't_plus_1', price: Number(thresholds.t_plus_1) || 0, color: '#fb7185', title: '-1SD' },
-      { key: 't_zero', price: Number(thresholds.t_zero) || 0, color: '#555555', title: '0' },
-      { key: 't_minus_1', price: Number(thresholds.t_minus_1) || 0, color: '#34d399', title: '+1SD' },
-      { key: 't_minus_2', price: Number(thresholds.t_minus_2) || 0, color: '#10b981', title: 'Bottom (+2SD)' },
+      { key: 't_minus_2', price: Number(thresholds.t_minus_2) || 0, color: '#f43f5e', title: 'Peak (-2)' },
+      { key: 't_minus_1', price: Number(thresholds.t_minus_1) || 0, color: '#fb7185', title: 'Distribution (-1)' },
+      { key: 't_zero', price: Number(thresholds.t_zero) || 0, color: '#555555', title: 'Mid' },
+      { key: 't_plus_1', price: Number(thresholds.t_plus_1) || 0, color: '#34d399', title: 'Accumulation (+1)' },
+      { key: 't_plus_2', price: Number(thresholds.t_plus_2) || 0, color: '#10b981', title: 'Bottom (+2)' },
     ];
 
     lineConfigs.forEach(config => {

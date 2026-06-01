@@ -46,3 +46,17 @@ export async function fetchBtcOhlc(): Promise<BtcOhlcData[]> {
   return res.json();
 }
 
+export async function runPipeline(metric?: string | null, rebuild?: boolean): Promise<{ success: boolean; run_all: string; audit: string }> {
+  const res = await fetch(`${API_BASE}/pipeline/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ metric, rebuild })
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to execute data pipeline');
+  }
+  return res.json();
+}
+
+

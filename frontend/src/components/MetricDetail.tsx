@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createChart, CrosshairMode, LineSeries, CandlestickSeries, AreaSeries, PriceScaleMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { MetricSummary, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
-import { getValuationColor } from '../utils/colors';
+import { valuationToHex } from '../utils/colors';
 
 interface MetricDetailProps {
   metric: MetricSummary;
@@ -11,6 +11,8 @@ interface MetricDetailProps {
   btcOhlcData: BtcOhlcData[];
   loading: boolean;
   onClose: () => void;
+  onRefetchMetric: (name: string) => Promise<void>;
+  refetching: boolean;
 }
 
 export const MetricDetail: React.FC<MetricDetailProps> = ({
@@ -19,7 +21,9 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
   config,
   btcOhlcData,
   loading,
-  onClose
+  onClose,
+  onRefetchMetric,
+  refetching
 }) => {
   const btcContainerRef = useRef<HTMLDivElement>(null);
   const rawContainerRef = useRef<HTMLDivElement>(null);
@@ -44,7 +48,7 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
   const metricDates = new Set(commonMetric.map(d => d.date.substring(0, 10)));
   const commonBtc = filteredBtcData.filter(d => metricDates.has(d.date.substring(0, 10)));
 
-  const color = getValuationColor(metric.normalized_value);
+  const color = valuationToHex(metric.normalized_value);
 
   // Detect if metric is inverted
   const isInverted = config 
@@ -102,19 +106,19 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
     // Create threshold lines on the raw chart
     if (config) {
       if (config.t_minus_2 !== null) {
-        rawSeries.createPriceLine({ price: config.t_minus_2, color: '#10b981', lineWidth: 1, lineStyle: 2, title: 'Bottom (+2SD)' });
+        rawSeries.createPriceLine({ price: config.t_minus_2, color: '#f43f5e', lineWidth: 1, lineStyle: 2, title: 'Peak (-2)' });
       }
       if (config.t_minus_1 !== null) {
-        rawSeries.createPriceLine({ price: config.t_minus_1, color: '#34d399', lineWidth: 1, lineStyle: 2, title: '+1SD' });
+        rawSeries.createPriceLine({ price: config.t_minus_1, color: '#fb7185', lineWidth: 1, lineStyle: 2, title: 'Distribution (-1)' });
       }
       if (config.t_zero !== null) {
         rawSeries.createPriceLine({ price: config.t_zero, color: '#555555', lineWidth: 1, lineStyle: 2, title: 'Mid' });
       }
       if (config.t_plus_1 !== null) {
-        rawSeries.createPriceLine({ price: config.t_plus_1, color: '#fb7185', lineWidth: 1, lineStyle: 2, title: '-1SD' });
+        rawSeries.createPriceLine({ price: config.t_plus_1, color: '#34d399', lineWidth: 1, lineStyle: 2, title: 'Accumulation (+1)' });
       }
       if (config.t_plus_2 !== null) {
-        rawSeries.createPriceLine({ price: config.t_plus_2, color: '#f43f5e', lineWidth: 1, lineStyle: 2, title: 'Peak (-2SD)' });
+        rawSeries.createPriceLine({ price: config.t_plus_2, color: '#10b981', lineWidth: 1, lineStyle: 2, title: 'Bottom (+2)' });
       }
     }
 
@@ -310,6 +314,26 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
             onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
           >
             SCALE: {isLogScale ? 'LOG' : 'LINEAR'}
+          </button>
+          <button 
+            onClick={() => onRefetchMetric(metric.name)}
+            disabled={refetching || loading}
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-secondary)',
+              padding: '0.4rem 0.8rem',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              borderRadius: '2px',
+              transition: 'all 0.2s',
+              opacity: (refetching || loading) ? 0.5 : 1
+            }}
+            onMouseOver={(e) => { if (!refetching && !loading) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--text-secondary)'; } }}
+            onMouseOut={(e) => { if (!refetching && !loading) { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; } }}
+          >
+            {refetching ? '🔄 REFETCHING...' : '🔄 REFETCH DATA'}
           </button>
           <div className="detail-latest-badge" style={{ borderColor: color, display: 'flex', alignItems: 'center', gap: '0.5rem', borderWidth: '1px', borderStyle: 'solid', padding: '0.25rem 0.75rem', borderRadius: '2px', fontFamily: 'monospace' }}>
             <span className="badge-lbl" style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>SCORE</span>

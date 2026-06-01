@@ -4,7 +4,7 @@ import { CompositeChart } from './CompositeChart';
 import { MetricGrid } from './MetricGrid';
 import { MetricDetail } from './MetricDetail';
 import { AuditPanel } from './AuditPanel';
-import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs, fetchBtcOhlc } from '../api/client';
+import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs, fetchBtcOhlc, runPipeline } from '../api/client';
 import type { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 
 export const DashboardLayout: React.FC = () => {
@@ -98,6 +98,37 @@ export const DashboardLayout: React.FC = () => {
       setDetailLoading(false);
     }
   };
+  
+  const [refetching, setRefetching] = useState(false);
+
+  const handleRefetchAll = async () => {
+    setRefetching(true);
+    try {
+      await runPipeline(null, false);
+      await loadDashboardData();
+      alert('System pipeline completed successfully! Re-calculated all components & composite valuation score.');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Pipeline execution failed: ${err.message || String(err)}`);
+    } finally {
+      setRefetching(false);
+    }
+  };
+
+  const handleRefetchMetric = async (name: string) => {
+    setDetailLoading(true);
+    try {
+      await runPipeline(name, false);
+      const data = await fetchMetricData(name);
+      setDetailData(data);
+      await loadDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      alert(`Refetch failed for metric '${name}': ${err.message || String(err)}`);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleCloseDetail = () => {
     setActiveMetric(null);
@@ -154,7 +185,29 @@ export const DashboardLayout: React.FC = () => {
             <span className="status-indicator online"></span>
             <span className="navbar-status-text">BTC.VALUATION.ENGINE.ONLINE</span>
           </div>
-          <div className="navbar-right">
+          <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button 
+              onClick={handleRefetchAll} 
+              disabled={refetching}
+              className="btn-refetch-all"
+              style={{
+                background: 'var(--bg-surface-elevated)',
+                border: '1px solid var(--border-strong)',
+                color: 'var(--text-primary)',
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                padding: '0.4rem 0.8rem',
+                cursor: 'pointer',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                transition: 'all 0.2s',
+                opacity: refetching ? 0.5 : 1
+              }}
+            >
+              {refetching ? '🔄 REFETCHING...' : '🔄 REFETCH ALL DATA'}
+            </button>
             <span className="navbar-datetime">SYSTEM_TIME: {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </header>
@@ -176,6 +229,8 @@ export const DashboardLayout: React.FC = () => {
                   btcOhlcData={btcOhlc}
                   loading={detailLoading}
                   onClose={handleCloseDetail}
+                  onRefetchMetric={handleRefetchMetric}
+                  refetching={refetching}
                 />
               )}
 

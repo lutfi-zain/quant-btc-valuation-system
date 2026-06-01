@@ -429,6 +429,76 @@ app.get('/api/metrics/config/:metric_name', (c) => {
   }
 });
 
+// POST /api/pipeline/run — Run ingestion and audit/composite recalculation
+app.post('/api/pipeline/run', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const rebuild = body.rebuild === true;
+    const metric = body.metric || null;
+
+    const dbFile = dbPath;
+
+    // 1. Run run_all
+    const runAllArgs = ["-m", "quant.run_all", "--db-path", dbFile];
+    if (rebuild) runAllArgs.push("--rebuild");
+    if (metric) {
+      runAllArgs.push("--metric");
+      runAllArgs.push(metric);
+    }
+
+    console.log(`Executing: python3 ${runAllArgs.join(" ")}`);
+    const runAllProc = Bun.spawn(["python3", ...runAllArgs], {
+      cwd: join(process.cwd(), ".."),
+    });
+
+    const runAllOutput = await new Response(runAllProc.stdout).text();
+    const runAllError = await new Response(runAllProc.stderr).text();
+    const runAllExitCode = await runAllProc.exited;
+
+    if (runAllExitCode !== 0) {
+      console.error("Pipeline run failed:", runAllError);
+      return c.json({
+        success: false,
+        step: "run_all",
+        exitCode: runAllExitCode,
+        error: runAllError || runAllOutput
+      }, 500);
+    }
+
+    // 2. Run audit runner to fit composite rescaling parameters
+    const auditArgs = ["-m", "quant.audit.runner", "--db-path", dbFile];
+    console.log(`Executing: python3 ${auditArgs.join(" ")}`);
+    const auditProc = Bun.spawn(["python3", ...auditArgs], {
+      cwd: join(process.cwd(), ".."),
+    });
+
+    const auditOutput = await new Response(auditProc.stdout).text();
+    const auditError = await new Response(auditProc.stderr).text();
+    const auditExitCode = await auditProc.exited;
+
+    if (auditExitCode !== 0) {
+      console.error("Audit run failed:", auditError);
+      return c.json({
+        success: false,
+        step: "audit",
+        exitCode: auditExitCode,
+        error: auditError || auditOutput
+      }, 500);
+    }
+
+    return c.json({
+      success: true,
+      run_all: runAllOutput,
+      audit: auditOutput
+    });
+
+  } catch (err: any) {
+    console.error("Pipeline trigger error:", err);
+    return c.json({ success: false, error: err?.message || String(err) }, 500);
+  }
+});
+
+
 export default {
   port: process.env.PORT || 3000,
   fetch: app.fetch,

@@ -6,9 +6,13 @@ from quant.components.registry import discover_components
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def run_all(db_path: str = "database/metrics.db", rebuild: bool = False) -> list[dict]:
+def run_all(db_path: str = "database/metrics.db", rebuild: bool = False, metric_name: str = None) -> list[dict]:
     """Runs all registered component pipelines sequentially with exception isolation."""
     component_classes = discover_components()
+    if metric_name:
+        component_classes = [c for c in component_classes if c.METRIC_NAME == metric_name]
+        if not component_classes:
+            logger.warning(f"No component found with METRIC_NAME '{metric_name}'")
     logger.info(f"Running data pipeline for {len(component_classes)} discovered components on database '{db_path}' (rebuild={rebuild})...")
     
     results = []
@@ -61,9 +65,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run BTC Cycle Valuation System data pipelines")
     parser.add_argument("--rebuild", action="store_true", help="Trigger a full historical rebuild of all metrics")
     parser.add_argument("--db-path", default="database/metrics.db", help="Path to the SQLite database file")
+    parser.add_argument("--metric", default=None, help="Trigger a pipeline for a specific metric only")
     args = parser.parse_args()
     
-    results = run_all(db_path=args.db_path, rebuild=args.rebuild)
+    results = run_all(db_path=args.db_path, rebuild=args.rebuild, metric_name=args.metric)
     print_summary(results)
     
     # Exit with code 1 if any pipeline failed
