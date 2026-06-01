@@ -1,4 +1,4 @@
-import type { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig } from '../types/metrics';
+import type { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 
 const API_BASE = '/api';
 
@@ -33,3 +33,10 @@ export async function fetchMetricConfigs(): Promise<MetricConfig[]> {
   if (!res.ok) throw new Error('Failed to fetch metrics configurations');
   return res.json();
 }
+
+export async function fetchBtcOhlc(): Promise<BtcOhlcData[]> {
+  const res = await fetch(`${API_BASE}/metrics/btc_ohlc`);
+  if (!res.ok) throw new Error('Failed to fetch BTC OHLC historical data');
+  return res.json();
+}
+

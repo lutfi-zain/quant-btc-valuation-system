@@ -1,16 +1,6 @@
-import React from 'react';
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceArea,
-  ReferenceLine
-} from 'recharts';
+import React, { useEffect, useRef, useState } from 'react';
+import { createChart, CrosshairMode, AreaSeries, PriceScaleMode } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { CompositeDataPoint } from '../types/metrics';
 
 interface CompositeChartProps {
@@ -19,6 +9,157 @@ interface CompositeChartProps {
 }
 
 export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading }) => {
+  const btcContainerRef = useRef<HTMLDivElement>(null);
+  const oscContainerRef = useRef<HTMLDivElement>(null);
+  
+  const [isLogScale, setIsLogScale] = useState(true);
+
+  const chartBtcRef = useRef<IChartApi | null>(null);
+  const chartOscRef = useRef<IChartApi | null>(null);
+  const btcSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const oscSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+
+  const filteredData = data.filter(d => d.date >= '2016-01-01').sort((a, b) => a.date.localeCompare(b.date));
+  const latestScore = filteredData[filteredData.length - 1]?.composite_value;
+
+  useEffect(() => {
+    if (loading || filteredData.length === 0) return;
+    if (!btcContainerRef.current || !oscContainerRef.current) return;
+
+    // 1. BTC Price Chart (Top Panel)
+    const chartBtc = createChart(btcContainerRef.current, {
+      layout: { background: { color: 'transparent' }, textColor: '#888888' },
+      grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
+      rightPriceScale: { 
+        borderColor: '#1e293b', 
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        mode: isLogScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal
+      },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      width: btcContainerRef.current.clientWidth,
+      height: 240,
+    });
+
+    const btcSeries = chartBtc.addSeries(AreaSeries, {
+      lineColor: '#ededed',
+      topColor: 'rgba(237, 237, 237, 0.2)',
+      bottomColor: 'rgba(237, 237, 237, 0.0)',
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 3,
+    });
+
+    chartBtcRef.current = chartBtc;
+    btcSeriesRef.current = btcSeries;
+
+    // 2. Composite Oscillator Chart (Bottom Panel)
+    const chartOsc = createChart(oscContainerRef.current, {
+      layout: { background: { color: 'transparent' }, textColor: '#888888' },
+      grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
+      rightPriceScale: { 
+        borderColor: '#1e293b', 
+        scaleMargins: { top: 0.1, bottom: 0.1 } 
+      },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      width: oscContainerRef.current.clientWidth,
+      height: 180,
+    });
+
+    const oscSeries = chartOsc.addSeries(AreaSeries, {
+      lineColor: '#3b82f6',
+      topColor: 'rgba(59, 130, 246, 0.2)',
+      bottomColor: 'rgba(59, 130, 246, 0.0)',
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 3,
+    });
+
+    // Reference lines on oscillator panel
+    oscSeries.createPriceLine({ price: 2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bubble (+2)' });
+    oscSeries.createPriceLine({ price: 1.0, color: '#fb7185', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: 0, color: '#475569', lineWidth: 1, lineStyle: 2 });
+    oscSeries.createPriceLine({ price: -1.0, color: '#34d399', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: -2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Undervalued (-2)' });
+
+    chartOscRef.current = chartOsc;
+    oscSeriesRef.current = oscSeries;
+
+    // Sync logical ranges
+    const charts = [chartBtc, chartOsc];
+    let isSyncing = false;
+    charts.forEach(c => {
+      c.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (range && !isSyncing) {
+          isSyncing = true;
+          charts.forEach(otherChart => {
+            if (otherChart !== c) {
+              otherChart.timeScale().setVisibleLogicalRange(range);
+            }
+          });
+          isSyncing = false;
+        }
+      });
+    });
+
+    // Populate series data
+    const btcPoints = filteredData
+      .filter(d => d.btc_price !== null && d.btc_price > 0)
+      .map(d => ({
+        time: d.date.substring(0, 10),
+        value: d.btc_price!
+      }));
+    btcSeries.setData(btcPoints);
+
+    const oscPoints = filteredData.map(d => ({
+      time: d.date.substring(0, 10),
+      value: d.composite_value
+    }));
+    oscSeries.setData(oscPoints);
+
+    // Sync crosshairs
+    chartBtc.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time || param.point.x < 0 || param.point.y < 0) {
+        chartOsc.clearCrosshairPosition();
+        return;
+      }
+      const item = filteredData.find(d => d.date.substring(0, 10) === param.time);
+      if (item) {
+        chartOsc.setCrosshairPosition(item.composite_value, param.time, oscSeries);
+      }
+    });
+
+    chartOsc.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time || param.point.x < 0 || param.point.y < 0) {
+        chartBtc.clearCrosshairPosition();
+        return;
+      }
+      const item = filteredData.find(d => d.date.substring(0, 10) === param.time);
+      if (item && item.btc_price) {
+        chartBtc.setCrosshairPosition(item.btc_price, param.time, btcSeries);
+      }
+    });
+
+    const handleResize = () => {
+      if (btcContainerRef.current && chartBtcRef.current) {
+        chartBtcRef.current.applyOptions({ width: btcContainerRef.current.clientWidth });
+      }
+      if (oscContainerRef.current && chartOscRef.current) {
+        chartOscRef.current.applyOptions({ width: oscContainerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chartBtc.remove();
+      chartOsc.remove();
+      chartBtcRef.current = null;
+      chartOscRef.current = null;
+    };
+  }, [loading, filteredData.length, isLogScale]);
+
   if (loading) {
     return (
       <div className="chart-placeholder loading">
@@ -28,7 +169,7 @@ export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading })
     );
   }
 
-  if (!data || data.length === 0) {
+  if (filteredData.length === 0) {
     return (
       <div className="chart-placeholder error">
         NO_COMPOSITE_DATA_AVAILABLE
@@ -36,144 +177,48 @@ export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading })
     );
   }
 
-  // Format date for tick labels
-  const formatDateTick = (tickStr: string) => {
-    try {
-      const date = new Date(tickStr);
-      return date.toLocaleDateString(undefined, { year: '2-digit', month: 'short' });
-    } catch {
-      return tickStr;
-    }
-  };
-
-  // Tooltip formatter
-  const formatTooltip = (value: any, name: any) => {
-    if (name === "btc_price") {
-      if (value === null || value === undefined) return ["N/A", "BTC Price"];
-      return [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, "BTC Price"];
-    }
-    if (name === "composite_value") {
-      return [Number(value).toFixed(3), "Composite Oscillator"];
-    }
-    return [value, name];
-  };
-
-  const formatTooltipTitle = (label: any) => {
-    try {
-      return new Date(label).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-    } catch {
-      return label;
-    }
-  };
-
   return (
     <div className="composite-chart-card">
       <div className="card-header">
         <div className="card-title-group">
           <h2>MASTER.COMPOSITE.OSCILLATOR</h2>
-          <span className="card-subtitle">Aggregate Bitcoin valuation score across 17 distinct metrics</span>
+          <span className="card-subtitle">Aggregate Bitcoin cycle oscillator score across all 17 indicators (since 2016)</span>
         </div>
-        <div className="composite-badge-info">
-          Latest Score: <span className="score-val">{data[data.length - 1]?.composite_value.toFixed(2)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            onClick={() => setIsLogScale(!isLogScale)}
+            style={{
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-secondary)',
+              padding: '0.4rem 0.8rem',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              borderRadius: '2px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--text-secondary)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+          >
+            SCALE: {isLogScale ? 'LOG' : 'LINEAR'}
+          </button>
+          <div className="composite-badge-info">
+            Latest Score: <span className="score-val" style={{ color: latestScore !== undefined && latestScore > 1 ? 'var(--accent-emerald)' : latestScore !== undefined && latestScore < -1 ? 'var(--accent-rose)' : 'var(--accent-amber)' }}>{latestScore !== undefined ? latestScore.toFixed(2) : 'N/A'}</span>
+          </div>
         </div>
       </div>
 
-      <div className="chart-container" style={{ width: '100%', height: 400 }}>
-        <ResponsiveContainer>
-          <ComposedChart data={data} margin={{ top: 20, right: 10, left: 10, bottom: 20 }}>
-            <defs>
-              <linearGradient id="colorComposite" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
-              </linearGradient>
-            </defs>
-            
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
-            
-            <XAxis 
-              dataKey="date" 
-              tickFormatter={formatDateTick} 
-              stroke="#64748b" 
-              tickLine={false}
-              axisLine={false}
-              minTickGap={40}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-            
-            {/* Left Y Axis for BTC Price (Log Scale) */}
-            <YAxis 
-              yAxisId="btc" 
-              scale="log" 
-              domain={['auto', 'auto']}
-              orientation="left" 
-              stroke="#94a3b8" 
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(val) => `$${Number(val).toLocaleString(undefined, { notation: 'compact' })}`}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-            
-            {/* Right Y Axis for Composite Oscillator (-2 to +2) */}
-            <YAxis 
-              yAxisId="osc" 
-              domain={[-2.0, 2.0]} 
-              orientation="right" 
-              stroke="#64748b" 
-              tickLine={false}
-              axisLine={false}
-              ticks={[-2.0, -1.0, 0, 1.0, 2.0]}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-
-            {/* Reference Areas (Valuation Bands) */}
-            <ReferenceArea y1={1.0} y2={2.0} fill="#10b981" fillOpacity={0.06} yAxisId="osc" />
-            <ReferenceArea y1={-1.0} y2={1.0} fill="#64748b" fillOpacity={0.02} yAxisId="osc" />
-            <ReferenceArea y1={-2.0} y2={-1.0} fill="#ef4444" fillOpacity={0.06} yAxisId="osc" />
-            
-            {/* Reference lines */}
-            <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" yAxisId="osc" />
-            <ReferenceLine y={1.0} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.25} yAxisId="osc" />
-            <ReferenceLine y={-1.0} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.25} yAxisId="osc" />
-
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '4px' }}
-              labelStyle={{ color: '#94a3b8', fontSize: '12px', fontFamily: 'monospace', fontWeight: 'bold' }}
-              itemStyle={{ fontSize: '12px', fontFamily: 'monospace' }}
-              labelFormatter={formatTooltipTitle}
-              formatter={formatTooltip}
-            />
-            
-            {/* Composite Score Area */}
-            <Area 
-              yAxisId="osc"
-              type="monotone" 
-              dataKey="composite_value" 
-              stroke="#3b82f6" 
-              strokeWidth={2}
-              fillOpacity={1} 
-              fill="url(#colorComposite)" 
-              name="composite_value"
-            />
-            
-            {/* BTC Price Line */}
-            <Line 
-              yAxisId="btc"
-              type="monotone" 
-              dataKey="btc_price" 
-              stroke="#e2e8f0" 
-              strokeWidth={1.5}
-              dot={false} 
-              name="btc_price"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="chart-legend">
-        <div className="legend-item"><span className="legend-dot btc"></span> BTC Price (Log)</div>
-        <div className="legend-item"><span className="legend-dot osc"></span> Composite Score</div>
-        <div className="legend-item"><span className="legend-band overvalued"></span> Overvalued (&lt; -1.0)</div>
-        <div className="legend-item"><span className="legend-band neutral"></span> Neutral (-1.0 to 1.0)</div>
-        <div className="legend-item"><span className="legend-band undervalued"></span> Undervalued (&gt; 1.0)</div>
+      <div className="chart-wrapper sub-panels" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="panel btc-panel" style={{ position: 'relative', height: '240px', backgroundColor: 'var(--bg-base)' }}>
+          <div className="tv-legend" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace', pointerEvents: 'none' }}>BTC PRICE (USD)</div>
+          <div ref={btcContainerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
+        
+        <div className="panel oscillator-panel" style={{ position: 'relative', height: '180px', backgroundColor: 'var(--bg-base)' }}>
+          <div className="tv-legend" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace', pointerEvents: 'none' }}>COMPOSITE OSCILLATOR</div>
+          <div ref={oscContainerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
       </div>
     </div>
   );

@@ -28,3 +28,12 @@ export interface MetricConfig {
   t_plus_1: number | null;
   t_plus_2: number | null;
 }
+
+export interface BtcOhlcData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+

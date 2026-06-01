@@ -1,22 +1,14 @@
-import React from 'react';
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine
-} from 'recharts';
-import type { MetricSummary, MetricDataPoint, MetricConfig } from '../types/metrics';
+import React, { useEffect, useRef, useState } from 'react';
+import { createChart, CrosshairMode, LineSeries, CandlestickSeries, AreaSeries, PriceScaleMode } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+import type { MetricSummary, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 import { getValuationColor } from '../utils/colors';
 
 interface MetricDetailProps {
   metric: MetricSummary;
   data: MetricDataPoint[];
   config: MetricConfig | null;
+  btcOhlcData: BtcOhlcData[];
   loading: boolean;
   onClose: () => void;
 }
@@ -25,9 +17,247 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
   metric,
   data,
   config,
+  btcOhlcData,
   loading,
   onClose
 }) => {
+  const btcContainerRef = useRef<HTMLDivElement>(null);
+  const rawContainerRef = useRef<HTMLDivElement>(null);
+  const oscContainerRef = useRef<HTMLDivElement>(null);
+  
+  const [isLogScale, setIsLogScale] = useState(true);
+
+  const chartBtcRef = useRef<IChartApi | null>(null);
+  const chartRawRef = useRef<IChartApi | null>(null);
+  const chartOscRef = useRef<IChartApi | null>(null);
+
+  const btcSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const rawSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const oscSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+
+  // Filter & match data sets from 2016-01-01
+  const filteredMetricData = data.filter(d => d.date >= '2016-01-01').sort((a, b) => a.date.localeCompare(b.date));
+  const filteredBtcData = btcOhlcData.filter(d => d.date >= '2016-01-01').sort((a, b) => a.date.localeCompare(b.date));
+
+  const btcDates = new Set(filteredBtcData.map(d => d.date.substring(0, 10)));
+  const commonMetric = filteredMetricData.filter(d => btcDates.has(d.date.substring(0, 10)));
+  const metricDates = new Set(commonMetric.map(d => d.date.substring(0, 10)));
+  const commonBtc = filteredBtcData.filter(d => metricDates.has(d.date.substring(0, 10)));
+
+  const color = getValuationColor(metric.normalized_value);
+
+  // Detect if metric is inverted
+  const isInverted = config 
+    ? (config.t_plus_2 !== null && config.t_minus_2 !== null && config.t_plus_2 > config.t_minus_2)
+    : false;
+
+  useEffect(() => {
+    if (loading || commonMetric.length === 0 || commonBtc.length === 0) return;
+    if (!btcContainerRef.current || !rawContainerRef.current || !oscContainerRef.current) return;
+
+    // 1. BTC Price Chart (Top Panel)
+    const chartBtc = createChart(btcContainerRef.current, {
+      layout: { background: { color: 'transparent' }, textColor: '#888888' },
+      grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
+      rightPriceScale: { 
+        borderColor: '#1e293b', 
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        mode: isLogScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal
+      },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      width: btcContainerRef.current.clientWidth,
+      height: 220,
+    });
+
+    const btcSeries = chartBtc.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#f43f5e',
+      borderVisible: false,
+      wickUpColor: '#10b981',
+      wickDownColor: '#f43f5e',
+    });
+
+    chartBtcRef.current = chartBtc;
+    btcSeriesRef.current = btcSeries;
+
+    // 2. Raw Metric Chart (Middle Panel)
+    const chartRaw = createChart(rawContainerRef.current, {
+      layout: { background: { color: 'transparent' }, textColor: '#888888' },
+      grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
+      rightPriceScale: { borderColor: '#1e293b', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      width: rawContainerRef.current.clientWidth,
+      height: 180,
+    });
+
+    const rawSeries = chartRaw.addSeries(LineSeries, {
+      color: '#3b82f6',
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 3,
+    });
+
+    // Create threshold lines on the raw chart
+    if (config) {
+      if (config.t_minus_2 !== null) {
+        rawSeries.createPriceLine({ price: config.t_minus_2, color: '#10b981', lineWidth: 1, lineStyle: 2, title: 'Bottom (+2SD)' });
+      }
+      if (config.t_minus_1 !== null) {
+        rawSeries.createPriceLine({ price: config.t_minus_1, color: '#34d399', lineWidth: 1, lineStyle: 2, title: '+1SD' });
+      }
+      if (config.t_zero !== null) {
+        rawSeries.createPriceLine({ price: config.t_zero, color: '#555555', lineWidth: 1, lineStyle: 2, title: 'Mid' });
+      }
+      if (config.t_plus_1 !== null) {
+        rawSeries.createPriceLine({ price: config.t_plus_1, color: '#fb7185', lineWidth: 1, lineStyle: 2, title: '-1SD' });
+      }
+      if (config.t_plus_2 !== null) {
+        rawSeries.createPriceLine({ price: config.t_plus_2, color: '#f43f5e', lineWidth: 1, lineStyle: 2, title: 'Peak (-2SD)' });
+      }
+    }
+
+    chartRawRef.current = chartRaw;
+    rawSeriesRef.current = rawSeries;
+
+    // 3. Valuation Oscillator Chart (Bottom Panel)
+    const chartOsc = createChart(oscContainerRef.current, {
+      layout: { background: { color: 'transparent' }, textColor: '#888888' },
+      grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
+      rightPriceScale: { borderColor: '#1e293b', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      width: oscContainerRef.current.clientWidth,
+      height: 150,
+    });
+
+    const oscSeries = chartOsc.addSeries(AreaSeries, {
+      lineColor: color,
+      topColor: `${color}33`, // Hex opacity
+      bottomColor: `${color}00`,
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 3,
+    });
+
+    // Reference lines for oscillator
+    oscSeries.createPriceLine({ price: 2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bubble (+2)' });
+    oscSeries.createPriceLine({ price: 1.0, color: '#fb7185', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: 0, color: '#475569', lineWidth: 1, lineStyle: 2 });
+    oscSeries.createPriceLine({ price: -1.0, color: '#34d399', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: -2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Undervalued (-2)' });
+
+    chartOscRef.current = chartOsc;
+    oscSeriesRef.current = oscSeries;
+
+    // Synchronize zoom & pan
+    const charts = [chartBtc, chartRaw, chartOsc];
+    let isSyncing = false;
+    charts.forEach(c => {
+      c.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (range && !isSyncing) {
+          isSyncing = true;
+          charts.forEach(otherChart => {
+            if (otherChart !== c) {
+              otherChart.timeScale().setVisibleLogicalRange(range);
+            }
+          });
+          isSyncing = false;
+        }
+      });
+    });
+
+    // Set Initial Data
+    const btcPoints = commonBtc.map(d => ({
+      time: d.date.substring(0, 10),
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close
+    }));
+    btcSeries.setData(btcPoints);
+
+    const rawPoints = commonMetric.map(d => ({
+      time: d.date.substring(0, 10),
+      value: d.raw_value
+    }));
+    rawSeries.setData(rawPoints);
+
+    const oscPoints = commonMetric.map(d => ({
+      time: d.date.substring(0, 10),
+      value: d.normalized_value
+    }));
+    oscSeries.setData(oscPoints);
+
+    // Sync Crosshairs
+    const getCrosshairData = (timeStr: string) => {
+      const targetMetric = commonMetric.find(d => d.date.substring(0, 10) === timeStr);
+      const targetBtc = commonBtc.find(d => d.date.substring(0, 10) === timeStr);
+      return {
+        rawVal: targetMetric ? targetMetric.raw_value : 0,
+        oscVal: targetMetric ? targetMetric.normalized_value : 0,
+        btcClose: targetBtc ? targetBtc.close : 0
+      };
+    };
+
+    chartBtc.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time || param.point.x < 0 || param.point.y < 0) {
+        chartRaw.clearCrosshairPosition();
+        chartOsc.clearCrosshairPosition();
+        return;
+      }
+      const data = getCrosshairData(param.time as string);
+      chartRaw.setCrosshairPosition(data.rawVal, param.time, rawSeries);
+      chartOsc.setCrosshairPosition(data.oscVal, param.time, oscSeries);
+    });
+
+    chartRaw.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time || param.point.x < 0 || param.point.y < 0) {
+        chartBtc.clearCrosshairPosition();
+        chartOsc.clearCrosshairPosition();
+        return;
+      }
+      const data = getCrosshairData(param.time as string);
+      chartBtc.setCrosshairPosition(data.btcClose, param.time, btcSeries);
+      chartOsc.setCrosshairPosition(data.oscVal, param.time, oscSeries);
+    });
+
+    chartOsc.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time || param.point.x < 0 || param.point.y < 0) {
+        chartBtc.clearCrosshairPosition();
+        chartRaw.clearCrosshairPosition();
+        return;
+      }
+      const data = getCrosshairData(param.time as string);
+      chartBtc.setCrosshairPosition(data.btcClose, param.time, btcSeries);
+      chartRaw.setCrosshairPosition(data.rawVal, param.time, rawSeries);
+    });
+
+    const handleResize = () => {
+      if (btcContainerRef.current && chartBtcRef.current) {
+        chartBtcRef.current.applyOptions({ width: btcContainerRef.current.clientWidth });
+      }
+      if (rawContainerRef.current && chartRawRef.current) {
+        chartRawRef.current.applyOptions({ width: rawContainerRef.current.clientWidth });
+      }
+      if (oscContainerRef.current && chartOscRef.current) {
+        chartOscRef.current.applyOptions({ width: oscContainerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chartBtc.remove();
+      chartRaw.remove();
+      chartOsc.remove();
+      chartBtcRef.current = null;
+      chartRawRef.current = null;
+      chartOscRef.current = null;
+    };
+  }, [loading, commonMetric.length, commonBtc.length, isLogScale]);
+
   if (loading) {
     return (
       <div id="metric-detail-section" className="metric-detail-card loading">
@@ -37,7 +267,7 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
     );
   }
 
-  if (!data || data.length === 0) {
+  if (commonMetric.length === 0 || commonBtc.length === 0) {
     return (
       <div id="metric-detail-section" className="metric-detail-card error">
         <div className="error-title">FAILED_TO_LOAD_METRIC_HISTORY</div>
@@ -46,146 +276,56 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
     );
   }
 
-  const color = getValuationColor(metric.normalized_value);
-  
-  // Detect if metric is inverted
-  const isInverted = config 
-    ? (config.t_plus_2 !== null && config.t_minus_2 !== null && config.t_plus_2 > config.t_minus_2)
-    : false;
-
-  const formatDateTick = (tickStr: string) => {
-    try {
-      return new Date(tickStr).toLocaleDateString(undefined, { year: '2-digit', month: 'short' });
-    } catch {
-      return tickStr;
-    }
-  };
-
-  const formatTooltip = (value: any, name: any) => {
-    if (name === "btc_price") {
-      if (value === null || value === undefined) return ["N/A", "BTC Price"];
-      return [`$${Number(value).toLocaleString()}`, "BTC Price"];
-    }
-    if (name === "raw_value") {
-      return [Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 }), "Raw Metric"];
-    }
-    if (name === "normalized_value") {
-      return [Number(value).toFixed(2), "Valuation Score"];
-    }
-    return [value, name];
-  };
-
   return (
     <div id="metric-detail-section" className="metric-detail-card">
       <div className="detail-header">
         <div className="metric-title-group">
-          <span className="category-label">{metric.category.toUpperCase()} // ANALYTICS</span>
+          <span className="category-label">{metric.category.toUpperCase()} // ANALYTICS (SINCE 2016)</span>
           <h2>{metric.name.toUpperCase()} — DETAILED VIEW</h2>
           <p className="metric-desc">{metric.name.toUpperCase()} provides quantitative cycle analysis for Bitcoin.</p>
         </div>
-        <div className="header-actions">
-          <div className="detail-latest-badge" style={{ borderColor: color }}>
-            <span className="badge-lbl">SCORE</span>
-            <span className="badge-val" style={{ color: color }}>{metric.normalized_value.toFixed(2)}</span>
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            onClick={() => setIsLogScale(!isLogScale)}
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-secondary)',
+              padding: '0.4rem 0.8rem',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              borderRadius: '2px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--text-secondary)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+          >
+            SCALE: {isLogScale ? 'LOG' : 'LINEAR'}
+          </button>
+          <div className="detail-latest-badge" style={{ borderColor: color, display: 'flex', alignItems: 'center', gap: '0.5rem', borderWidth: '1px', borderStyle: 'solid', padding: '0.25rem 0.75rem', borderRadius: '2px', fontFamily: 'monospace' }}>
+            <span className="badge-lbl" style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>SCORE</span>
+            <span className="badge-val" style={{ color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>{metric.normalized_value.toFixed(2)}</span>
           </div>
           <button onClick={onClose} className="btn-close-detail">× CLOSE</button>
         </div>
       </div>
 
-      <div className="detail-chart-wrapper" style={{ width: '100%', height: 350 }}>
-        <ResponsiveContainer>
-          <ComposedChart data={data} margin={{ top: 15, right: 10, left: 10, bottom: 15 }}>
-            <defs>
-              <linearGradient id="colorDetailNorm" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.2}/>
-                <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
-            <XAxis 
-              dataKey="date" 
-              tickFormatter={formatDateTick} 
-              stroke="#64748b" 
-              tickLine={false}
-              axisLine={false}
-              minTickGap={45}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-            {/* Left Axis: BTC Price (Log) */}
-            <YAxis 
-              yAxisId="btc" 
-              scale="log" 
-              domain={['auto', 'auto']}
-              orientation="left" 
-              stroke="#94a3b8" 
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(val) => `$${Number(val).toLocaleString(undefined, { notation: 'compact' })}`}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-            {/* Right Axis: Raw Metric Value */}
-            <YAxis 
-              yAxisId="raw" 
-              orientation="right" 
-              stroke="#3b82f6" 
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(val) => Number(val).toLocaleString(undefined, { maximumSignificantDigits: 3 })}
-              style={{ fontSize: '11px', fontFamily: 'monospace' }}
-            />
-            {/* Hidden Axis: Normalized Value (-2 to 2) */}
-            <YAxis 
-              yAxisId="norm" 
-              domain={[-2, 2]} 
-              orientation="right" 
-              hide={true}
-            />
+      <div className="chart-wrapper sub-panels" style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border-subtle)', backgroundColor: 'var(--border-subtle)', width: '100%', position: 'relative' }}>
+        <div className="panel btc-panel" style={{ position: 'relative', height: '220px', backgroundColor: 'var(--bg-base)' }}>
+          <div className="tv-legend" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace', pointerEvents: 'none' }}>BTC PRICE (USD)</div>
+          <div ref={btcContainerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
+        
+        <div className="panel raw-panel" style={{ position: 'relative', height: '180px', backgroundColor: 'var(--bg-base)' }}>
+          <div className="tv-legend" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace', pointerEvents: 'none' }}>RAW METRIC VALUE</div>
+          <div ref={rawContainerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
 
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '4px' }}
-              labelStyle={{ color: '#94a3b8', fontSize: '11px', fontFamily: 'monospace' }}
-              itemStyle={{ fontSize: '12px', fontFamily: 'monospace' }}
-              formatter={formatTooltip}
-            />
-
-            {/* Reference Line for Neutral 0 */}
-            <ReferenceLine yAxisId="norm" y={0} stroke="#475569" strokeDasharray="3 3" />
-            <ReferenceLine yAxisId="norm" y={1.0} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.2} />
-            <ReferenceLine yAxisId="norm" y={-1.0} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.2} />
-
-            {/* Normalized Overlay Area */}
-            <Area 
-              yAxisId="norm"
-              type="monotone" 
-              dataKey="normalized_value" 
-              stroke={color}
-              strokeWidth={1.5}
-              fill="url(#colorDetailNorm)" 
-              name="normalized_value"
-            />
-            {/* Raw Metric Line */}
-            <Line 
-              yAxisId="raw"
-              type="monotone" 
-              dataKey="raw_value" 
-              stroke="#3b82f6" 
-              strokeWidth={2} 
-              dot={false}
-              name="raw_value"
-            />
-            {/* BTC Price Line */}
-            <Line 
-              yAxisId="btc"
-              type="monotone" 
-              dataKey="btc_price" 
-              stroke="#e2e8f0" 
-              strokeWidth={1} 
-              strokeOpacity={0.5}
-              dot={false}
-              name="btc_price"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <div className="panel oscillator-panel" style={{ position: 'relative', height: '150px', backgroundColor: 'var(--bg-base)' }}>
+          <div className="tv-legend" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace', pointerEvents: 'none' }}>DYNAMIC VALUATION SCORE</div>
+          <div ref={oscContainerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
       </div>
 
       {config && (

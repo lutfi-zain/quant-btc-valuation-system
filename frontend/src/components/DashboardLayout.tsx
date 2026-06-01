@@ -3,13 +3,14 @@ import { Sidebar } from './Sidebar';
 import { CompositeChart } from './CompositeChart';
 import { MetricGrid } from './MetricGrid';
 import { MetricDetail } from './MetricDetail';
-import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs } from '../api/client';
-import type { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig } from '../types/metrics';
+import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs, fetchBtcOhlc } from '../api/client';
+import type { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 
 export const DashboardLayout: React.FC = () => {
   const [metrics, setMetrics] = useState<MetricSummary[]>([]);
   const [compositeData, setCompositeData] = useState<CompositeDataPoint[]>([]);
   const [configs, setConfigs] = useState<MetricConfig[]>([]);
+  const [btcOhlc, setBtcOhlc] = useState<BtcOhlcData[]>([]);
   const [sparklineData, setSparklineData] = useState<Record<string, { date: string; value: number }[]>>({});
   
   // Selection and detail view state
@@ -25,16 +26,18 @@ export const DashboardLayout: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Parallel fetch summaries, composite timeseries, and configurations
-      const [summaries, composite, metricConfigs] = await Promise.all([
+      // Parallel fetch summaries, composite timeseries, configurations, and BTC OHLC
+      const [summaries, composite, metricConfigs, ohlc] = await Promise.all([
         fetchMetrics(),
         fetchComposite(),
-        fetchMetricConfigs()
+        fetchMetricConfigs(),
+        fetchBtcOhlc()
       ]);
 
       setMetrics(summaries);
       setCompositeData(composite);
       setConfigs(metricConfigs);
+      setBtcOhlc(ohlc);
 
       // Concurrent fetch for sparklines (last 90 data points)
       const sparklinePromises = summaries.map(async (m) => {
@@ -154,6 +157,7 @@ export const DashboardLayout: React.FC = () => {
               metric={activeSummary}
               data={detailData}
               config={activeConfig}
+              btcOhlcData={btcOhlc}
               loading={detailLoading}
               onClose={handleCloseDetail}
             />
