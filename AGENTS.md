@@ -86,4 +86,6 @@ For the canonical implementation patterns, refer to:
 
 *When you consistently fail at a specific architectural nuance or encounter a repeating edge-case, add a note here to prevent future agents from making the same mistake.*
 
+- **[2026-06-02]** Daily vs Weekly Metric Alignment & Future Composite Gaps — Daily metric timelines must start on 2009-01-01, while weekly series start on 2009-01-03 (Saturdays). To avoid future weekly gaps when daily data is not yet available, constrain `/api/composite` query bounds to `MAX(date)` of `btc_ohlc`. [Evidence: timeline shift offset correction, backend/index.ts:230]
 - **Initial Setup:** The codebase is initialized under a spec-driven flow via OpenSpec. Refer to local workflows under `.agent/workflows/` for applying changes.
+
