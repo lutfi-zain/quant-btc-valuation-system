@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import { MetricCard } from './MetricCard';
-import { MetricSummary } from '../types/metrics';
+import type { MetricSummary } from '../types/metrics';
 
 const mockMetric: MetricSummary = {
   name: 'aviv_ratio',

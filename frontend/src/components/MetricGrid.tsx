@@ -1,5 +1,5 @@
 import React from 'react';
-import { MetricSummary } from '../types/metrics';
+import type { MetricSummary } from '../types/metrics';
 import { MetricCard } from './MetricCard';
 
 interface MetricGridProps {

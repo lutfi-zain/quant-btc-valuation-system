@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   ReferenceLine
 } from 'recharts';
-import { MetricSummary, MetricDataPoint, MetricConfig } from '../types/metrics';
+import type { MetricSummary, MetricDataPoint, MetricConfig } from '../types/metrics';
 import { getValuationColor } from '../utils/colors';
 
 interface MetricDetailProps {

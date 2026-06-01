@@ -1,4 +1,4 @@
-import { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig } from '../types/metrics';
+import type { MetricSummary, MetricDataPoint, CompositeDataPoint, MetricConfig } from '../types/metrics';
 
 const API_BASE = '/api';
 

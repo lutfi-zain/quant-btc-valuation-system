@@ -1,6 +1,6 @@
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { MetricSummary } from '../types/metrics';
+import type { MetricSummary } from '../types/metrics';
 import { getValuationColor } from '../utils/colors';
 
 interface MetricCardProps {

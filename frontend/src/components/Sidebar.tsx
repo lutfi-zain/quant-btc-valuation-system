@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MetricSummary } from '../types/metrics';
+import type { MetricSummary } from '../types/metrics';
 
 interface SidebarProps {
   metrics: MetricSummary[];

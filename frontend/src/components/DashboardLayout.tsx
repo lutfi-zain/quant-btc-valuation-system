@@ -4,7 +4,7 @@ import { CompositeChart } from './CompositeChart';
 import { MetricGrid } from './MetricGrid';
 import { MetricDetail } from './MetricDetail';
 import { fetchMetrics, fetchComposite, fetchMetricData, fetchMetricConfigs } from '../api/client';
-import { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig } from '../types/metrics';
+import type { MetricSummary, CompositeDataPoint, MetricDataPoint, MetricConfig } from '../types/metrics';
 
 export const DashboardLayout: React.FC = () => {
   const [metrics, setMetrics] = useState<MetricSummary[]>([]);
