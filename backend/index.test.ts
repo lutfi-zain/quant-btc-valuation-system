@@ -34,7 +34,7 @@ beforeAll(async () => {
   
   insert.run("2023-01-01", "aviv_ratio", 1.5, 0.5, 20000.0);
   insert.run("2023-01-02", "aviv_ratio", 1.6, 0.6, 21000.0);
-  insert.run("2023-01-01", "other_metric", 10.0, 0.1, 20000.0);
+  insert.run("2023-01-01", "mvrv_z", 10.0, 0.1, 20000.0);
   
   db.close();
 });
@@ -53,7 +53,7 @@ test("GET /api/health", async () => {
   expect(body).toEqual({ status: "ok", version: "1.0.0" });
 });
 
-test("GET /api/metrics/aviv_ratio", async () => {
+test("GET /api/metrics/:metric_name", async () => {
   const res = await app.request("/api/metrics/aviv_ratio");
   expect(res.status).toBe(200);
   
@@ -86,20 +86,61 @@ test("GET /api/metrics/aviv_ratio", async () => {
   }
 });
 
-test("POST and GET /api/metrics/config", async () => {
-  const db = new Database(process.env.DB_PATH!);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS metric_config (
-        metric_name TEXT PRIMARY KEY,
-        t_minus_2 REAL,
-        t_minus_1 REAL,
-        t_zero REAL,
-        t_plus_1 REAL,
-        t_plus_2 REAL
-    )
-  `);
-  db.close();
+test("GET /api/metrics", async () => {
+  const res = await app.request("/api/metrics");
+  expect(res.status).toBe(200);
+  
+  const body = await res.json() as any[];
+  expect(body.length).toBe(2);
+  
+  const aviv = body.find(m => m.name === "aviv_ratio");
+  expect(aviv).toBeDefined();
+  expect(aviv.category).toBe("fundamental");
+  expect(aviv.raw_value).toBe(1.6);
+  expect(aviv.normalized_value).toBe(0.6);
+  
+  const mvrv = body.find(m => m.name === "mvrv_z");
+  expect(mvrv).toBeDefined();
+  expect(mvrv.category).toBe("fundamental");
+  expect(mvrv.raw_value).toBe(10.0);
+  expect(mvrv.normalized_value).toBe(0.1);
+});
 
+test("GET /api/composite", async () => {
+  const res = await app.request("/api/composite");
+  expect(res.status).toBe(200);
+  
+  const body = await res.json() as any[];
+  expect(body.length).toBe(2);
+  
+  // 2023-01-01: aviv_ratio = 0.5, mvrv_z = 0.1 -> average is 0.3
+  expect(body[0]).toEqual({
+    date: "2023-01-01",
+    composite_value: 0.3,
+    component_count: 2,
+    btc_price: 20000.0
+  });
+  
+  // Test query params
+  const resFiltered = await app.request("/api/composite?start=2023-01-02");
+  expect(resFiltered.status).toBe(200);
+  const bodyFiltered = await resFiltered.json() as any[];
+  expect(bodyFiltered.length).toBe(1);
+  expect(bodyFiltered[0].date).toBe("2023-01-02");
+});
+
+test("GET /api/metrics/configs", async () => {
+  const res = await app.request("/api/metrics/configs");
+  expect(res.status).toBe(200);
+  
+  const body = await res.json() as any[];
+  // Configurations should contain seeded data (e.g. 17 rows)
+  expect(body.length).toBeGreaterThan(0);
+  const aviv = body.find(c => c.metric_name === "aviv_ratio");
+  expect(aviv).toBeDefined();
+});
+
+test("POST and GET /api/metrics/config", async () => {
   // Test POST
   const postRes = await app.request("/api/metrics/config", {
     method: "POST",

@@ -1,0 +1,49 @@
+import pandas as pd
+from quant.components.base import BaseComponent
+from quant.components.bitview_client import fetch_series
+from quant.components.normalization import normalize_metric
+
+class AvivRatioComponent(BaseComponent):
+    METRIC_NAME = "aviv_ratio"
+    DESCRIPTION = "AVIV Ratio-Z"
+    CATEGORY = "fundamental"
+
+    def fetch_data(self, full_rebuild: bool = False) -> pd.DataFrame:
+        start_date = None if full_rebuild else self.get_latest_date()
+        
+        df_cp = fetch_series("cointime_price", start_date=start_date)
+        df_p = fetch_series("price", start_date=start_date)
+        
+        if df_cp.empty or df_p.empty:
+            return pd.DataFrame()
+            
+        df = pd.merge(df_cp, df_p, on="date", suffixes=("_cp", "_p"))
+        df = df[(df["value_cp"] > 0) & (df["value_p"] > 0)]
+        return df
+
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        df["raw_value"] = df["value_p"] / df["value_cp"]
+        df["btc_price"] = df["value_p"]
+        
+        df["normalized_value"] = df["raw_value"].apply(
+            lambda val: normalize_metric(self.db_path, self.METRIC_NAME, val)
+        )
+        return df
+
+    def store(self, df: pd.DataFrame) -> int:
+        return self._default_store(df)
+
+    def run_pipeline(self, full_rebuild: bool = False) -> dict:
+        return self._default_run_pipeline(full_rebuild=full_rebuild)
+
+if __name__ == "__main__":
+    import argparse
+    import json
+    
+    parser = argparse.ArgumentParser(description=f"Run {AvivRatioComponent.METRIC_NAME} pipeline")
+    parser.add_argument("--rebuild", action="store_true", help="Trigger full rebuild")
+    args = parser.parse_args()
+    
+    comp = AvivRatioComponent()
+    res = comp.run_pipeline(full_rebuild=args.rebuild)
+    print(json.dumps(res, indent=2))
