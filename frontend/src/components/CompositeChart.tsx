@@ -36,12 +36,12 @@ export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading })
         scaleMargins: { top: 0.1, bottom: 0.1 },
         mode: isLogScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal
       },
-      timeScale: { borderColor: '#1e293b', timeVisible: false },
-      width: btcContainerRef.current.clientWidth,
+      timeScale: { borderColor: '#1e293b', visible: false }, // Hide top panel timescale completely
+      width: btcContainerRef.current.clientWidth || 600,
       height: 240,
     });
 
-    const btcSeries = chartBtc.addSeries(AreaSeries, {
+    const btcSeries = chartBtc.addAreaSeries({
       lineColor: '#ededed',
       topColor: 'rgba(237, 237, 237, 0.2)',
       bottomColor: 'rgba(237, 237, 237, 0.0)',
@@ -62,12 +62,12 @@ export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading })
         borderColor: '#1e293b', 
         scaleMargins: { top: 0.1, bottom: 0.1 } 
       },
-      timeScale: { borderColor: '#1e293b', timeVisible: false },
-      width: oscContainerRef.current.clientWidth,
+      timeScale: { borderColor: '#1e293b', visible: true, timeVisible: false }, // Show bottom panel timescale
+      width: oscContainerRef.current.clientWidth || 600,
       height: 180,
     });
 
-    const oscSeries = chartOsc.addSeries(AreaSeries, {
+    const oscSeries = chartOsc.addAreaSeries({
       lineColor: '#3b82f6',
       topColor: 'rgba(59, 130, 246, 0.2)',
       bottomColor: 'rgba(59, 130, 246, 0.0)',
@@ -141,18 +141,25 @@ export const CompositeChart: React.FC<CompositeChartProps> = ({ data, loading })
       }
     });
 
-    const handleResize = () => {
-      if (btcContainerRef.current && chartBtcRef.current) {
-        chartBtcRef.current.applyOptions({ width: btcContainerRef.current.clientWidth });
+    // ResizeObserver to handle initial width layout computation dynamically
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width } = entry.contentRect;
+        if (width === 0) continue;
+        if (entry.target === btcContainerRef.current && chartBtcRef.current) {
+          chartBtcRef.current.resize(width, 240);
+        }
+        if (entry.target === oscContainerRef.current && chartOscRef.current) {
+          chartOscRef.current.resize(width, 180);
+        }
       }
-      if (oscContainerRef.current && chartOscRef.current) {
-        chartOscRef.current.applyOptions({ width: oscContainerRef.current.clientWidth });
-      }
-    };
-    window.addEventListener('resize', handleResize);
+    });
+
+    if (btcContainerRef.current) resizeObserver.observe(btcContainerRef.current);
+    if (oscContainerRef.current) resizeObserver.observe(oscContainerRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       chartBtc.remove();
       chartOsc.remove();
       chartBtcRef.current = null;
