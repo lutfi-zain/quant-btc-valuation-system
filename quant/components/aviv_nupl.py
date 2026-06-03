@@ -1,44 +1,49 @@
 import pandas as pd
 from quant.components.base import BaseComponent
-from quant.components.bitview_client import fetch_series
+from quant.components.checkonchain_client import fetch_plotly_chart, CheckonchainClientError
 from quant.components.normalization import normalize_metric
 
 class AvivNuplComponent(BaseComponent):
     """
     AVIV (Active-Value-to-Investor-Value) Net Unrealized Profit/Loss (NUPL) Component.
 
-    Mathematical formula:
-    AVIV NUPL = (price - true_market_mean) / price
-
-    By calculating in price terms using True Market Mean (TMM) rather than
-    capitalization series, we avoid scaling issues and align perfectly
-    with checkonchain.com reference charts.
+    AVIV NUPL is scraped directly from checkonchain.com reference charts.
     """
     METRIC_NAME = "aviv_nupl"
     DESCRIPTION = "AVIV NUPL"
     CATEGORY = "fundamental"
 
     def fetch_data(self, full_rebuild: bool = False) -> pd.DataFrame:
-        start_date = None if full_rebuild else self.get_latest_date()
+        url = "https://charts.checkonchain.com/btconchain/cointime/nupl_aviv/nupl_aviv_light.html"
+        chart_data = fetch_plotly_chart(url)
         
-        df_tmm = fetch_series("true_market_mean", start_date=start_date)
-        df_p = fetch_series("price", start_date=start_date)
+        df_price = chart_data.get("Price")
+        df_nupl = chart_data.get("AVIV NUPL")
         
-        if df_tmm.empty or df_p.empty:
+        if df_price is None or df_price.empty or df_nupl is None or df_nupl.empty:
             return pd.DataFrame()
             
-        # Merge true_market_mean and price
-        df = pd.merge(df_tmm, df_p, on="date", suffixes=("_tmm", "_p"))
+        # Merge price and AVIV NUPL
+        df = pd.merge(df_price, df_nupl, on="date", suffixes=("_p", "_nupl"))
         
-        # Drop rows where values are <= 0 or None
-        df = df.dropna(subset=["value_tmm", "value_p"])
-        df = df[(df["value_tmm"] > 0) & (df["value_p"] > 0)]
+        df = df.dropna(subset=["value_p", "value_nupl"])
+        df = df.sort_values("date").reset_index(drop=True)
+        
+        if df.empty:
+            return pd.DataFrame()
+            
+        df["raw_value"] = df["value_nupl"]
+        df["btc_price"] = df["value_p"]
+        
+        # Filter for delta if not full_rebuild
+        if not full_rebuild:
+            start_date = self.get_latest_date()
+            if start_date:
+                df = df[df["date"] > start_date]
+                
         return df
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        df["raw_value"] = (df["value_p"] - df["value_tmm"]) / df["value_p"]
-        df["btc_price"] = df["value_p"]
-        
         df["normalized_value"] = df["raw_value"].apply(
             lambda val: normalize_metric(self.db_path, self.METRIC_NAME, val)
         )

@@ -42,24 +42,26 @@ def test_fit_rescaling_params_db(tmp_path):
     
     run_date = "2026-06-01"
     
-    # Insert multiple metrics to compute raw_composite = AVG(normalized_value)
-    # Let's insert 100 days
+    # Insert 10 different metrics to satisfy the component_count >= 10 constraint
+    # Plus insert aviv_nupl with a huge value to verify it is excluded from the average
     for i in range(100):
         date_str = f"2026-05-{i+1:02d}" if i < 30 else f"2026-06-{i-29:02d}"
         val = float(i) / 100.0 # goes from 0.0 to 0.99
+        for m in range(1, 11):
+            insert_metric(
+                date=date_str,
+                metric_name=f"m{m}",
+                raw_value=val,
+                normalized_value=val,
+                btc_price=60000.0,
+                db_path=db_file
+            )
+        # aviv_nupl should be ignored in composite average
         insert_metric(
             date=date_str,
-            metric_name="m1",
-            raw_value=val,
-            normalized_value=val,
-            btc_price=60000.0,
-            db_path=db_file
-        )
-        insert_metric(
-            date=date_str,
-            metric_name="m2",
-            raw_value=val * 2.0,
-            normalized_value=val * 2.0,
+            metric_name="aviv_nupl",
+            raw_value=999.0,
+            normalized_value=999.0,
             btc_price=60000.0,
             db_path=db_file
         )
@@ -69,14 +71,12 @@ def test_fit_rescaling_params_db(tmp_path):
     assert "raw_p50" in params
     assert "raw_p97_5" in params
     
-    # Expected average is (val + val*2.0)/2 = 1.5 * val
-    # Which ranges from 0.0 to 1.485
-    # Check that database matches
+    # Expected average excluding aviv_nupl is val, which ranges from 0.0 to 0.99
     conn = get_connection(db_file)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM audit_composite_params WHERE run_date = ?", (run_date,))
     row = cursor.fetchone()
     assert row is not None
     assert abs(row["raw_min"] - 0.0) < 1e-7
-    assert abs(row["raw_max"] - 1.485) < 1e-7
+    assert abs(row["raw_max"] - 0.99) < 1e-7
     conn.close()

@@ -27,14 +27,14 @@ class MvrvZComponent(BaseComponent):
         if df.empty:
             return pd.DataFrame()
             
-        # Compute standard deviation of market cap
-        std_mc = df["value_mc"].std()
+        # Compute 4-year (1,460-day) rolling standard deviation of market cap
+        rolling_std = df["value_mc"].rolling(window=1460, min_periods=1).std()
+        expanding_std = df["value_mc"].expanding(min_periods=1).std()
+        std_series = rolling_std.fillna(expanding_std).fillna(1.0)
+        std_series = std_series.replace(0.0, 1.0)
         
         # Compute MVRV Z-Score: (MC - RC) / StdDev(MC)
-        if std_mc > 0:
-            df["raw_value"] = (df["value_mc"] - df["value_rc"]) / std_mc
-        else:
-            df["raw_value"] = 0.0
+        df["raw_value"] = (df["value_mc"] - df["value_rc"]) / std_series
             
         df["btc_price"] = df["value_price"]
         

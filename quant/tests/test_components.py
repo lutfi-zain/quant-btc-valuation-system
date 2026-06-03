@@ -68,25 +68,22 @@ def test_db(tmp_path):
     conn.close()
     return db_file
 
-@patch('quant.components.aviv_ratio.fetch_series')
+@patch('quant.components.aviv_ratio.fetch_plotly_chart')
 def test_aviv_ratio_component(mock_fetch, test_db):
     comp = AvivRatioComponent(db_path=test_db)
     
-    # Mock multiple rows to allow mean and std dev calculation
-    # ratios = [1.0, 2.0, 3.0]. mean = 2.0, std = 1.0. 
-    # For date 2025-06-03: ratio = 3.0 -> Z-score = (3.0 - 2.0)/1.0 = 1.0
-    mock_fetch.side_effect = [
-        pd.DataFrame([
+    mock_fetch.return_value = {
+        "Price": pd.DataFrame([
             {"date": "2025-06-01T00:00:00Z", "value": 20000.0},
-            {"date": "2025-06-02T00:00:00Z", "value": 20000.0},
-            {"date": "2025-06-03T00:00:00Z", "value": 20000.0}
-        ]), # true_market_mean
-        pd.DataFrame([
-            {"date": "2025-06-01T00:00:00Z", "value": 20000.0}, # ratio = 1.0
-            {"date": "2025-06-02T00:00:00Z", "value": 40000.0}, # ratio = 2.0
-            {"date": "2025-06-03T00:00:00Z", "value": 60000.0}  # ratio = 3.0
-        ])  # price
-    ]
+            {"date": "2025-06-02T00:00:00Z", "value": 40000.0},
+            {"date": "2025-06-03T00:00:00Z", "value": 60000.0}
+        ]),
+        "AVIV Z-Score": pd.DataFrame([
+            {"date": "2025-06-01T00:00:00Z", "value": -1.0},
+            {"date": "2025-06-02T00:00:00Z", "value": 0.0},
+            {"date": "2025-06-03T00:00:00Z", "value": 1.0}
+        ])
+    }
     
     res = comp.run_pipeline(full_rebuild=True)
     assert res["status"] == "success"
@@ -104,20 +101,20 @@ def test_aviv_ratio_component(mock_fetch, test_db):
     assert rows[2][1] == pytest.approx(1.0)
     assert rows[2][2] == pytest.approx(-1.0)
 
-@patch('quant.components.aviv_nupl.fetch_series')
+@patch('quant.components.aviv_nupl.fetch_plotly_chart')
 def test_aviv_nupl_component(mock_fetch, test_db):
     comp = AvivNuplComponent(db_path=test_db)
     
-    mock_fetch.side_effect = [
-        pd.DataFrame([{"date": "2025-06-01", "value": 32000.0}]), # true_market_mean
-        pd.DataFrame([{"date": "2025-06-01", "value": 40000.0}])  # price
-    ]
+    mock_fetch.return_value = {
+        "Price": pd.DataFrame([{"date": "2025-06-01T00:00:00Z", "value": 40000.0}]),
+        "AVIV NUPL": pd.DataFrame([{"date": "2025-06-01T00:00:00Z", "value": 0.2}])
+    }
     
     res = comp.run_pipeline(full_rebuild=True)
     assert res["status"] == "success"
     assert res["rows_stored"] == 1
     
-    # Verify values in DB: raw_value should be (40000-32000)/40000 = 0.2
+    # Verify values in DB: raw_value should be 0.2
     conn = sqlite3.connect(test_db)
     row = conn.execute("SELECT raw_value, normalized_value FROM timeseries_metrics WHERE metric_name = 'aviv_nupl'").fetchone()
     conn.close()
@@ -180,18 +177,18 @@ def test_mvrv_z_component(mock_fetch, test_db):
     assert res["status"] == "success"
     assert res["rows_stored"] == 3
     
-    # std of [10000, 20000, 30000] is 10000.0
-    # For date 2025-06-02: raw = (20000 - 18300) / 10000 = 1700 / 10000 = 0.17
-    # For date 2025-06-01: raw = (10000 - 8500) / 10000 = 0.15
+    # std values:
+    # row 0: expanding std of [10000] is NaN -> replaced by 1.0. raw = (10000 - 8500)/1 = 1500.0
+    # row 1: expanding std of [10000, 20000] is ~7071.07. raw = (20000 - 18300)/7071.07 = 0.2404
+    # row 2: expanding std of [10000, 20000, 30000] is 10000.0. raw = (30000 - 15400)/10000 = 1.46
     conn = sqlite3.connect(test_db)
     rows = conn.execute("SELECT date, raw_value, normalized_value FROM timeseries_metrics WHERE metric_name = 'mvrv_z' ORDER BY date ASC").fetchall()
     conn.close()
     
     assert len(rows) == 3
-    assert rows[0][1] == pytest.approx(0.15) # raw
-    assert rows[0][2] == pytest.approx(2.0)  # normalized (threshold t_plus_2 = 0.15 maps to 2.0)
-    assert rows[1][1] == pytest.approx(0.17) # raw
-    assert rows[1][2] == pytest.approx(1.0)  # normalized (threshold t_plus_1 = 0.17 maps to 1.0)
+    assert rows[0][1] == pytest.approx(1500.0) # raw
+    assert rows[1][1] == pytest.approx(0.2404163) # raw
+    assert rows[2][1] == pytest.approx(1.46) # raw
 
 @patch('quant.components.lth_sth_sopr_ratio.fetch_series')
 def test_lth_sth_sopr_ratio_component(mock_fetch, test_db):
@@ -393,6 +390,13 @@ def test_fear_greed_og_component(mock_get, mock_fetch, test_db):
     assert res["status"] == "success"
     assert res["rows_stored"] == 2
 
+    # Verify SMA smoothing (28.0 and 28.5)
+    conn = sqlite3.connect(test_db)
+    rows = conn.execute("SELECT date, raw_value FROM timeseries_metrics WHERE metric_name = 'fear_greed_og' ORDER BY date ASC").fetchall()
+    conn.close()
+    assert rows[0][1] == pytest.approx(28.0)
+    assert rows[1][1] == pytest.approx(28.5)
+
 @patch('quant.components.fear_greed_cmc.fetch_series')
 @patch('quant.components.fear_greed_cmc.requests.get')
 def test_fear_greed_cmc_component(mock_get, mock_fetch, test_db):
@@ -417,3 +421,10 @@ def test_fear_greed_cmc_component(mock_get, mock_fetch, test_db):
     res = comp.run_pipeline(full_rebuild=True)
     assert res["status"] == "success"
     assert res["rows_stored"] == 2
+
+    # Verify SMA smoothing (35.0 and 32.5)
+    conn = sqlite3.connect(test_db)
+    rows = conn.execute("SELECT date, raw_value FROM timeseries_metrics WHERE metric_name = 'fear_greed_cmc' ORDER BY date ASC").fetchall()
+    conn.close()
+    assert rows[0][1] == pytest.approx(35.0)
+    assert rows[1][1] == pytest.approx(32.5)

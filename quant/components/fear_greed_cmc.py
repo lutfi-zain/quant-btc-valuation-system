@@ -52,8 +52,8 @@ class FearGreedCmcComponent(BaseComponent):
                 start += limit
                 time.sleep(1) # Gentle rate limit spacing
         else:
-            # Incremental: just fetch the first page with limit=30
-            url = f"{base_url}?limit=30"
+            # Incremental: fetch with limit=90 to ensure complete window for SMA
+            url = f"{base_url}?limit=90"
             try:
                 response = requests.get(url, timeout=30)
                 response.raise_for_status()
@@ -81,6 +81,9 @@ class FearGreedCmcComponent(BaseComponent):
 
         # Sort chronologically
         df_fng = df_fng.sort_values("date").reset_index(drop=True)
+
+        # Apply 30-day Simple Moving Average (SMA) smoothing
+        df_fng["raw_value"] = df_fng["raw_value"].rolling(window=30, min_periods=1).mean()
 
         # Merge with BTC price from bitview.space
         try:

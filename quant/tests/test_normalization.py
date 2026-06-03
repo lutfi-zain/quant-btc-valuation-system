@@ -44,7 +44,7 @@ def test_normalization_one_sided_bottom_only():
     # between +2SD and +1SD
     assert normalize(1.45, 1.3, 1.6, None, None) == pytest.approx(1.5)
     # outside bottom zone
-    assert normalize(2.5, 1.3, 1.6, None, None) == pytest.approx(0.0)
+    assert math.isnan(normalize(2.5, 1.3, 1.6, None, None))
 
 def test_normalization_one_sided_top_only():
     # Unrealized Sell Risk: t_plus_2=None, t_plus_1=None, t_minus_1=1.8, t_minus_2=2.2
@@ -53,7 +53,7 @@ def test_normalization_one_sided_top_only():
     # between -1SD and -2SD
     assert normalize(2.0, None, None, 1.8, 2.2) == pytest.approx(-1.5)
     # outside top zone
-    assert normalize(1.0, None, None, 1.8, 2.2) == pytest.approx(0.0)
+    assert math.isnan(normalize(1.0, None, None, 1.8, 2.2))
 
 def test_normalization_edge_cases():
     # NaN raw value

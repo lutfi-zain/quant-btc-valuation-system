@@ -39,7 +39,7 @@ def normalize(raw_value: float, t_plus_2: float | None, t_plus_1: float | None, 
             if raw_value <= t_plus_2:
                 return 2.0
             elif raw_value >= t_plus_1:
-                return 0.0
+                return float('nan')
             else:
                 return 2.0 - safe_div(raw_value - t_plus_2, t_plus_1 - t_plus_2)
         else:
@@ -47,7 +47,7 @@ def normalize(raw_value: float, t_plus_2: float | None, t_plus_1: float | None, 
             if raw_value >= t_plus_2:
                 return 2.0
             elif raw_value <= t_plus_1:
-                return 0.0
+                return float('nan')
             else:
                 return 1.0 + safe_div(raw_value - t_plus_1, t_plus_2 - t_plus_1)
 
@@ -60,7 +60,7 @@ def normalize(raw_value: float, t_plus_2: float | None, t_plus_1: float | None, 
             if raw_value >= t_minus_2:
                 return -2.0
             elif raw_value <= t_minus_1:
-                return 0.0
+                return float('nan')
             else:
                 return -1.0 - safe_div(raw_value - t_minus_1, t_minus_2 - t_minus_1)
         else:
@@ -68,7 +68,7 @@ def normalize(raw_value: float, t_plus_2: float | None, t_plus_1: float | None, 
             if raw_value <= t_minus_2:
                 return -2.0
             elif raw_value >= t_minus_1:
-                return 0.0
+                return float('nan')
             else:
                 return -2.0 + safe_div(raw_value - t_minus_2, t_minus_1 - t_minus_2)
 

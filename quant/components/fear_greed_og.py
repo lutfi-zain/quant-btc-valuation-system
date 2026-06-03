@@ -11,7 +11,7 @@ class FearGreedOgComponent(BaseComponent):
     CATEGORY = "sentiment"
 
     def fetch_data(self, full_rebuild: bool = False) -> pd.DataFrame:
-        limit = 0 if full_rebuild else 30
+        limit = 0 if full_rebuild else 90
         url = f"https://api.alternative.me/fng/?limit={limit}&format=json"
         
         try:
@@ -45,6 +45,9 @@ class FearGreedOgComponent(BaseComponent):
 
         # Sort chronologically
         df_fng = df_fng.sort_values("date").reset_index(drop=True)
+
+        # Apply 30-day Simple Moving Average (SMA) smoothing
+        df_fng["raw_value"] = df_fng["raw_value"].rolling(window=30, min_periods=1).mean()
 
         # Merge with BTC price from bitview.space
         try:

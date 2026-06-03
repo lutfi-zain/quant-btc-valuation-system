@@ -26,13 +26,13 @@
 - [x] 4.2 Update `quant/audit/composite.py` to only fit rescaling parameters using dates that contain at least 10 active components (i.e. `component_count >= 10`).
 - [x] 4.3 Update the `/api/composite` endpoint in `backend/index.ts` to exclude `aviv_nupl` from the `AVG(normalized_value)` calculation.
 - [x] 4.4 Add unit tests for the updated composite parameters fitting and composite calculation logic.
-- [ ] 4.5 Perform manual validation of the rescaled composite values by calling the `/api/composite` endpoint and validating range limits.
+- [x] 4.5 Perform manual validation of the rescaled composite values by calling the `/api/composite` endpoint and validating range limits.
 
 ## 5. Verification and Auditing
 
 - [x] 5.1 Re-run the full data pipeline rebuild (`python -m quant.run_all --rebuild`) followed by the statistical audit runner (`python -m quant.audit.runner`).
-- [ ] 5.2 Verify that all tests pass cleanly by running `python -m pytest -xvs`.
-- [ ] 5.3 Perform final auto-verification:
+- [x] 5.2 Verify that all tests pass cleanly by running `python -m pytest -xvs`.
+- [x] 5.3 Perform final auto-verification:
     - 1. Read all change artifacts (`proposal.md`, `design.md`, `specs/`, and `tasks.md`) to verify zero gaps.
     - 2. Map every `SHALL` and `MUST` requirement in the specifications against the implemented code.
     - 3. Start the backend Hono server locally in the background and run a curl test against `/api/composite` and `/api/audit/summary` to verify actual JSON responses.

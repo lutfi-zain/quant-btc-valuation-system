@@ -206,9 +206,9 @@ function normalizeValue(
   t_plus_1: number | null,
   t_minus_1: number | null,
   t_minus_2: number | null
-): number {
+): number | null {
   if (rawValue === null || isNaN(rawValue)) {
-    return NaN;
+    return null;
   }
   
   if (t_plus_2 === null && t_plus_1 === null && t_minus_1 === null && t_minus_2 === null) {
@@ -241,7 +241,7 @@ function normalizeValue(
       if (rawValue <= t_plus_2) {
         return 2.0;
       } else if (rawValue >= t_plus_1) {
-        return 0.0;
+        return null;
       } else {
         return 2.0 - safe_div(rawValue - t_plus_2, t_plus_1 - t_plus_2);
       }
@@ -250,7 +250,7 @@ function normalizeValue(
       if (rawValue >= t_plus_2) {
         return 2.0;
       } else if (rawValue <= t_plus_1) {
-        return 0.0;
+        return null;
       } else {
         return 1.0 + safe_div(rawValue - t_plus_1, t_plus_2 - t_plus_1);
       }
@@ -264,7 +264,7 @@ function normalizeValue(
       if (rawValue >= t_minus_2) {
         return -2.0;
       } else if (rawValue <= t_minus_1) {
-        return 0.0;
+        return null;
       } else {
         return -1.0 - safe_div(rawValue - t_minus_1, t_minus_2 - t_minus_1);
       }
@@ -273,7 +273,7 @@ function normalizeValue(
       if (rawValue <= t_minus_2) {
         return -2.0;
       } else if (rawValue >= t_minus_1) {
-        return 0.0;
+        return null;
       } else {
         return -2.0 + safe_div(rawValue - t_minus_2, t_minus_1 - t_minus_2);
       }
@@ -339,6 +339,7 @@ app.get('/api/composite', (c) => {
         MAX(btc_price) as btc_price
       FROM timeseries_metrics
       WHERE normalized_value IS NOT NULL
+        AND metric_name != 'aviv_nupl'
         AND (date <= (SELECT MAX(date) FROM btc_ohlc) OR (SELECT COUNT(*) FROM btc_ohlc) = 0)
     `;
     
