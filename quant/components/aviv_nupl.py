@@ -11,27 +11,23 @@ class AvivNuplComponent(BaseComponent):
     def fetch_data(self, full_rebuild: bool = False) -> pd.DataFrame:
         start_date = None if full_rebuild else self.get_latest_date()
         
-        df_active = fetch_series("active_cap", start_date=start_date)
-        df_investor = fetch_series("investor_cap", start_date=start_date)
-        df_price = fetch_series("price", start_date=start_date)
+        df_tmm = fetch_series("true_market_mean", start_date=start_date)
+        df_p = fetch_series("price", start_date=start_date)
         
-        if df_active.empty or df_investor.empty or df_price.empty:
+        if df_tmm.empty or df_p.empty:
             return pd.DataFrame()
             
-        # Merge active_cap and investor_cap
-        df = pd.merge(df_active, df_investor, on="date", suffixes=("_active", "_investor"))
-        # Merge with price
-        df = pd.merge(df, df_price, on="date")
+        # Merge true_market_mean and price
+        df = pd.merge(df_tmm, df_p, on="date", suffixes=("_tmm", "_p"))
         
-        df = df.rename(columns={"value": "value_price"})
         # Drop rows where values are <= 0 or None
-        df = df.dropna(subset=["value_active", "value_investor", "value_price"])
-        df = df[(df["value_active"] > 0) & (df["value_price"] > 0)]
+        df = df.dropna(subset=["value_tmm", "value_p"])
+        df = df[(df["value_tmm"] > 0) & (df["value_p"] > 0)]
         return df
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        df["raw_value"] = (df["value_active"] - df["value_investor"]) / df["value_active"]
-        df["btc_price"] = df["value_price"]
+        df["raw_value"] = (df["value_p"] - df["value_tmm"]) / df["value_p"]
+        df["btc_price"] = df["value_p"]
         
         df["normalized_value"] = df["raw_value"].apply(
             lambda val: normalize_metric(self.db_path, self.METRIC_NAME, val)

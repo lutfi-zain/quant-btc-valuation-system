@@ -11,18 +11,18 @@ class AvivRatioComponent(BaseComponent):
     def fetch_data(self, full_rebuild: bool = False) -> pd.DataFrame:
         start_date = None if full_rebuild else self.get_latest_date()
         
-        df_cp = fetch_series("cointime_price", start_date=start_date)
+        df_tmm = fetch_series("true_market_mean", start_date=start_date)
         df_p = fetch_series("price", start_date=start_date)
         
-        if df_cp.empty or df_p.empty:
+        if df_tmm.empty or df_p.empty:
             return pd.DataFrame()
             
-        df = pd.merge(df_cp, df_p, on="date", suffixes=("_cp", "_p"))
-        df = df[(df["value_cp"] > 0) & (df["value_p"] > 0)]
+        df = pd.merge(df_tmm, df_p, on="date", suffixes=("_tmm", "_p"))
+        df = df[(df["value_tmm"] > 0) & (df["value_p"] > 0)]
         return df
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        df["raw_value"] = df["value_p"] / df["value_cp"]
+        df["raw_value"] = df["value_p"] / df["value_tmm"]
         df["btc_price"] = df["value_p"]
         
         df["normalized_value"] = df["raw_value"].apply(

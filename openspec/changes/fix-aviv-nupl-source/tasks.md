@@ -1,12 +1,12 @@
 ## 1. AVIV Ratio Ingestion Code Changes
 
-- [ ] 1.1 Update `quant/components/aviv_ratio.py` to fetch `true_market_mean` instead of `cointime_price` and calculate the ratio as `price / true_market_mean`.
-- [ ] 1.2 Update unit tests in `quant/tests/test_components.py` for AVIV Ratio to mock `true_market_mean` instead of `cointime_price` and assert correct calculation.
+- [x] 1.1 Update `quant/components/aviv_ratio.py` to fetch `true_market_mean` instead of `cointime_price` and calculate the ratio as `price / true_market_mean`.
+- [x] 1.2 Update unit tests in `quant/tests/test_components.py` for AVIV Ratio to mock `true_market_mean` instead of `cointime_price` and assert correct calculation.
 
 ## 2. AVIV NUPL Ingestion Code Changes
 
-- [ ] 2.1 Update `quant/components/aviv_nupl.py` to fetch `true_market_mean` and `price` instead of caps, and calculate the NUPL as `(price - true_market_mean) / price`.
-- [ ] 2.2 Update unit tests in `quant/tests/test_components.py` for AVIV NUPL to mock `true_market_mean` and `price` and assert correct calculation.
+- [x] 2.1 Update `quant/components/aviv_nupl.py` to fetch `true_market_mean` and `price` instead of caps, and calculate the NUPL as `(price - true_market_mean) / price`.
+- [x] 2.2 Update unit tests in `quant/tests/test_components.py` for AVIV NUPL to mock `true_market_mean` and `price` and assert correct calculation.
 
 ## 3. Integration & Database Rebuild
 

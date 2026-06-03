@@ -3,6 +3,7 @@ import { createChart, CrosshairMode, LineSeries, CandlestickSeries, AreaSeries, 
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { MetricSummary, MetricDataPoint, MetricConfig, BtcOhlcData } from '../types/metrics';
 import { valuationToHex } from '../utils/colors';
+import { ThresholdEditor } from './ThresholdEditor';
 
 interface MetricDetailProps {
   metric: MetricSummary;
@@ -12,6 +13,7 @@ interface MetricDetailProps {
   loading: boolean;
   onClose: () => void;
   onRefetchMetric: (name: string) => Promise<void>;
+  onRefreshDashboardData: () => Promise<void>;
   refetching: boolean;
 }
 
@@ -23,6 +25,7 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
   loading,
   onClose,
   onRefetchMetric,
+  onRefreshDashboardData,
   refetching
 }) => {
   const btcContainerRef = useRef<HTMLDivElement>(null);
@@ -50,10 +53,7 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
 
   const color = valuationToHex(metric.normalized_value);
 
-  // Detect if metric is inverted
-  const isInverted = config 
-    ? (config.t_plus_2 !== null && config.t_minus_2 !== null && config.t_plus_2 > config.t_minus_2)
-    : false;
+
 
   useEffect(() => {
     if (loading || commonMetric.length === 0 || commonBtc.length === 0) return;
@@ -369,54 +369,11 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
         </div>
       </div>
 
-      {config && (
-        <div className="thresholds-panel">
-          <h4 className="panel-title">VALUATION.THRESHOLD.MATRICES</h4>
-          <div className="thresholds-grid">
-            <div className="threshold-col overvalued">
-              <span className="col-label">🔴 OVERVALUED</span>
-              <div className="threshold-values">
-                <div className="val-row">
-                  <span>-2SD (Extreme Peak):</span>
-                  <strong>{config.t_minus_2 !== null ? config.t_minus_2 : 'N/A'}</strong>
-                </div>
-                <div className="val-row">
-                  <span>-1SD (Market Top):</span>
-                  <strong>{config.t_minus_1 !== null ? config.t_minus_1 : 'N/A'}</strong>
-                </div>
-              </div>
-            </div>
-            
-            <div className="threshold-col neutral">
-              <span className="col-label">🟡 NEUTRAL</span>
-              <div className="threshold-values">
-                <div className="val-row">
-                  <span>Midpoint:</span>
-                  <strong>{config.t_zero !== null ? config.t_zero : '0.00'}</strong>
-                </div>
-                <div className="val-row">
-                  <span>Direction:</span>
-                  <strong>{isInverted ? 'INVERTED (Lower = Overvalued)' : 'NORMAL (Higher = Overvalued)'}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="threshold-col undervalued">
-              <span className="col-label">🟢 UNDERVALUED</span>
-              <div className="threshold-values">
-                <div className="val-row">
-                  <span>+1SD (Accumulation):</span>
-                  <strong>{config.t_plus_1 !== null ? config.t_plus_1 : 'N/A'}</strong>
-                </div>
-                <div className="val-row">
-                  <span>+2SD (Extreme Cycle Bottom):</span>
-                  <strong>{config.t_plus_2 !== null ? config.t_plus_2 : 'N/A'}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ThresholdEditor 
+        metricName={metric.name} 
+        currentConfig={config} 
+        onRefresh={onRefreshDashboardData} 
+      />
     </div>
   );
 };

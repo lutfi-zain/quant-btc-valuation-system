@@ -59,4 +59,32 @@ export async function runPipeline(metric?: string | null, rebuild?: boolean): Pr
   return res.json();
 }
 
+export async function renormalizeMetric(metricName: string): Promise<{ success: boolean; metric_name: string; rows_updated: number }> {
+  const res = await fetch(`${API_BASE}/metrics/renormalize/${metricName}`, {
+    method: 'POST'
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to renormalize metric '${metricName}'`);
+  }
+  return res.json();
+}
 
+export async function fetchMetricConfigDefaults(): Promise<MetricConfig[]> {
+  const res = await fetch(`${API_BASE}/metrics/config/defaults`);
+  if (!res.ok) throw new Error('Failed to fetch default metric configurations');
+  return res.json();
+}
+
+export async function saveMetricConfig(config: MetricConfig): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/metrics/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to save metric configuration');
+  }
+  return res.json();
+}

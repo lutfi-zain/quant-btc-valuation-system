@@ -72,10 +72,10 @@ def seed_db(db_path: str = DB_PATH):
         )
     ''')
     
-    # Insert or replace
+    # Insert or ignore
     for row in SEED_DATA:
         cursor.execute('''
-            INSERT OR REPLACE INTO metric_config
+            INSERT OR IGNORE INTO metric_config
             (metric_name, t_plus_2, t_plus_1, t_zero, t_minus_1, t_minus_2)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', row)

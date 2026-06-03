@@ -72,9 +72,9 @@ def test_db(tmp_path):
 def test_aviv_ratio_component(mock_fetch, test_db):
     comp = AvivRatioComponent(db_path=test_db)
     
-    # Mock cointime_price and price data
+    # Mock true_market_mean and price data
     mock_fetch.side_effect = [
-        pd.DataFrame([{"date": "2025-06-01", "value": 20000.0}]), # cointime_price
+        pd.DataFrame([{"date": "2025-06-01", "value": 20000.0}]), # true_market_mean
         pd.DataFrame([{"date": "2025-06-01", "value": 40000.0}])  # price
     ]
     
@@ -96,8 +96,7 @@ def test_aviv_nupl_component(mock_fetch, test_db):
     comp = AvivNuplComponent(db_path=test_db)
     
     mock_fetch.side_effect = [
-        pd.DataFrame([{"date": "2025-06-01", "value": 10000.0}]), # active_cap
-        pd.DataFrame([{"date": "2025-06-01", "value": 8000.0}]),  # investor_cap
+        pd.DataFrame([{"date": "2025-06-01", "value": 32000.0}]), # true_market_mean
         pd.DataFrame([{"date": "2025-06-01", "value": 40000.0}])  # price
     ]
     
@@ -105,7 +104,7 @@ def test_aviv_nupl_component(mock_fetch, test_db):
     assert res["status"] == "success"
     assert res["rows_stored"] == 1
     
-    # Verify values in DB: raw_value should be (10000-8000)/10000 = 0.2
+    # Verify values in DB: raw_value should be (40000-32000)/40000 = 0.2
     conn = sqlite3.connect(test_db)
     row = conn.execute("SELECT raw_value, normalized_value FROM timeseries_metrics WHERE metric_name = 'aviv_nupl'").fetchone()
     conn.close()

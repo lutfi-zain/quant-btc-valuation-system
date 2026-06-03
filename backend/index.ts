@@ -138,7 +138,7 @@ const SEED_DATA = [
 
 try {
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO metric_config
+    INSERT OR IGNORE INTO metric_config
     (metric_name, t_plus_2, t_plus_1, t_zero, t_minus_1, t_minus_2)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
@@ -199,6 +199,118 @@ app.get('/api/metrics/configs', (c) => {
     return c.json({ error: 'Failed to fetch metric configs' }, 500);
   }
 });
+
+function normalizeValue(
+  rawValue: number | null,
+  t_plus_2: number | null,
+  t_plus_1: number | null,
+  t_minus_1: number | null,
+  t_minus_2: number | null
+): number {
+  if (rawValue === null || isNaN(rawValue)) {
+    return NaN;
+  }
+  
+  if (t_plus_2 === null && t_plus_1 === null && t_minus_1 === null && t_minus_2 === null) {
+    return 0.0;
+  }
+
+  // Auto-detect direction
+  let inverted = false;
+  if (t_plus_2 !== null && t_minus_2 !== null) {
+    inverted = t_plus_2 > t_minus_2;
+  } else if (t_plus_2 !== null && t_plus_1 !== null) {
+    inverted = t_plus_2 > t_plus_1;
+  } else if (t_minus_1 !== null && t_minus_2 !== null) {
+    inverted = t_minus_1 > t_minus_2;
+  }
+
+  const is_bottom_only = t_minus_1 === null && t_minus_2 === null;
+  const is_top_only = t_plus_1 === null && t_plus_2 === null;
+
+  const safe_div = (num: number, denom: number) => {
+    return Math.abs(denom) > 1e-9 ? num / denom : 0.0;
+  };
+
+  if (is_bottom_only) {
+    if (t_plus_2 === null || t_plus_1 === null) {
+      return 0.0;
+    }
+    if (!inverted) {
+      // Normal direction (lower raw value = higher valuation/bottom = +2)
+      if (rawValue <= t_plus_2) {
+        return 2.0;
+      } else if (rawValue >= t_plus_1) {
+        return 0.0;
+      } else {
+        return 2.0 - safe_div(rawValue - t_plus_2, t_plus_1 - t_plus_2);
+      }
+    } else {
+      // Inverted direction (higher raw value = higher valuation/bottom = +2)
+      if (rawValue >= t_plus_2) {
+        return 2.0;
+      } else if (rawValue <= t_plus_1) {
+        return 0.0;
+      } else {
+        return 1.0 + safe_div(rawValue - t_plus_1, t_plus_2 - t_plus_1);
+      }
+    }
+  } else if (is_top_only) {
+    if (t_minus_1 === null || t_minus_2 === null) {
+      return 0.0;
+    }
+    if (!inverted) {
+      // Normal direction (higher raw value = lower valuation/top = -2)
+      if (rawValue >= t_minus_2) {
+        return -2.0;
+      } else if (rawValue <= t_minus_1) {
+        return 0.0;
+      } else {
+        return -1.0 - safe_div(rawValue - t_minus_1, t_minus_2 - t_minus_1);
+      }
+    } else {
+      // Inverted direction (lower raw value = lower valuation/top = -2)
+      if (rawValue <= t_minus_2) {
+        return -2.0;
+      } else if (rawValue >= t_minus_1) {
+        return 0.0;
+      } else {
+        return -2.0 + safe_div(rawValue - t_minus_2, t_minus_1 - t_minus_2);
+      }
+    }
+  } else {
+    if (t_plus_2 === null || t_plus_1 === null || t_minus_1 === null || t_minus_2 === null) {
+      return 0.0;
+    }
+    if (!inverted) {
+      // Normal direction
+      if (rawValue <= t_plus_2) {
+        return 2.0;
+      } else if (rawValue >= t_minus_2) {
+        return -2.0;
+      } else if (rawValue >= t_plus_2 && rawValue < t_plus_1) {
+        return 2.0 - safe_div(rawValue - t_plus_2, t_plus_1 - t_plus_2);
+      } else if (rawValue >= t_plus_1 && rawValue < t_minus_1) {
+        return 1.0 - 2.0 * safe_div(rawValue - t_plus_1, t_minus_1 - t_plus_1);
+      } else {
+        return -1.0 - safe_div(rawValue - t_minus_1, t_minus_2 - t_minus_1);
+      }
+    } else {
+      // Inverted direction
+      if (rawValue >= t_plus_2) {
+        return 2.0;
+      } else if (rawValue <= t_minus_2) {
+        return -2.0;
+      } else if (rawValue > t_plus_1 && rawValue <= t_plus_2) {
+        return 1.0 + safe_div(rawValue - t_plus_1, t_plus_2 - t_plus_1);
+      } else if (rawValue > t_minus_1 && rawValue <= t_plus_1) {
+        return -1.0 + 2.0 * safe_div(rawValue - t_minus_1, t_plus_1 - t_minus_1);
+      } else {
+        return -2.0 + safe_div(rawValue - t_minus_2, t_minus_1 - t_minus_2);
+      }
+    }
+  }
+}
 
 function rescale(rawVal: number, params: { raw_p2_5: number, raw_p50: number, raw_p97_5: number }): number {
   const { raw_p2_5, raw_p50, raw_p97_5 } = params;
@@ -416,6 +528,19 @@ app.post('/api/metrics/config', async (c) => {
   }
 });
 
+// GET /api/metrics/config/defaults — Get default metric threshold configurations
+app.get('/api/metrics/config/defaults', (c) => {
+  const defaults = SEED_DATA.map((row) => ({
+    metric_name: row[0],
+    t_plus_2: row[1],
+    t_plus_1: row[2],
+    t_zero: row[3],
+    t_minus_1: row[4],
+    t_minus_2: row[5],
+  }));
+  return c.json(defaults);
+});
+
 // Endpoint to get metric config
 app.get('/api/metrics/config/:metric_name', (c) => {
   try {
@@ -439,6 +564,65 @@ app.get('/api/metrics/config/:metric_name', (c) => {
     return c.json({ error: 'Failed to fetch metric config' }, 500);
   }
 });
+
+// POST /api/metrics/renormalize/:metric_name — Renormalize all timeseries data for a metric
+app.post('/api/metrics/renormalize/:metric_name', async (c) => {
+  const metric_name = c.req.param('metric_name');
+  if (!metric_name || metric_name.trim() === '') {
+    return c.json({ error: 'metric_name is required' }, 400);
+  }
+
+  try {
+    // 1. Load thresholds from metric_config
+    const thresholdStmt = db.prepare(`
+      SELECT t_plus_2, t_plus_1, t_zero, t_minus_1, t_minus_2
+      FROM metric_config
+      WHERE metric_name = ?
+    `);
+    const thresholds = thresholdStmt.get(metric_name) as any;
+    if (!thresholds) {
+      return c.json({ error: `Metric config not found for '${metric_name}'` }, 404);
+    }
+
+    // 2. Fetch all timeseries_metrics rows for the metric
+    const timeseriesStmt = db.prepare(`
+      SELECT date, raw_value
+      FROM timeseries_metrics
+      WHERE metric_name = ?
+    `);
+    const rows = timeseriesStmt.all(metric_name) as any[];
+
+    // 3. Perform renormalization and update within a transaction
+    let rows_updated = 0;
+    if (rows.length > 0) {
+      const updateStmt = db.prepare(`
+        UPDATE timeseries_metrics
+        SET normalized_value = ?
+        WHERE metric_name = ? AND date = ?
+      `);
+
+      db.transaction(() => {
+        for (const row of rows) {
+          const normVal = normalizeValue(
+            row.raw_value,
+            thresholds.t_plus_2,
+            thresholds.t_plus_1,
+            thresholds.t_minus_1,
+            thresholds.t_minus_2
+          );
+          updateStmt.run(normVal, metric_name, row.date);
+          rows_updated++;
+        }
+      })();
+    }
+
+    return c.json({ success: true, metric_name, rows_updated });
+  } catch (err: any) {
+    console.error(`Error renormalizing metric ${metric_name}:`, err);
+    return c.json({ error: 'Internal server error during renormalization' }, 500);
+  }
+});
+
 
 // POST /api/pipeline/run — Run ingestion and audit/composite recalculation
 app.post('/api/pipeline/run', async (c) => {
@@ -515,4 +699,4 @@ export default {
   fetch: app.fetch,
 };
 
-export { app };
+export { app, normalizeValue };

@@ -1,7 +1,7 @@
 # metric-normalization Specification
 
 ## Purpose
-Defines the normalization engine that maps raw indicator values to the system's -2 to +2 valuation oscillator scale. The engine uses piecewise linear interpolation between expert-defined SD-band thresholds stored in the `metric_config` table, and handles three metric direction types: normal, inverted, and one-sided (bottom-only / top-only).
+Defines the normalization engine that maps raw indicator values to the system's -2 to +2 valuation oscillator scale. The engine uses piecewise linear interpolation between expert-defined SD-band thresholds stored in the `metric_config` table, handles three metric direction types (normal, inverted, and one-sided), and preserves user-customized configurations across database seeding and backend restarts.
 
 ## Requirements
 
@@ -179,9 +179,13 @@ This function SHALL load thresholds from `metric_config` using `load_thresholds(
 
 ### Requirement: Seed Data for All 17 Metric Thresholds
 
-The system SHALL pre-load all 17 metric threshold configurations into the `metric_config` table via a database seeder script or migration. The seeder MUST be idempotent (safe to run multiple times without duplicating data, using INSERT OR REPLACE).
+The system SHALL pre-load all 17 metric threshold configurations into the `metric_config` table via a database seeder script or migration. The seeder MUST be idempotent (safe to run multiple times without duplicating data).
 
-The seed data SHALL contain the following exact threshold values:
+The seeder SHALL use `INSERT OR IGNORE` (instead of `INSERT OR REPLACE`) to ensure that existing user-customized threshold values are never overwritten. Only metrics that do not yet have a row in `metric_config` SHALL be inserted.
+
+The backend startup seed logic in `backend/index.ts` SHALL also use `INSERT OR IGNORE` to prevent overwriting user-modified thresholds on every server restart.
+
+The seed data SHALL contain the following exact threshold values (unchanged from the original spec):
 
 | metric_name | t_plus_2 | t_plus_1 | t_zero | t_minus_1 | t_minus_2 |
 |---|---|---|---|---|---|
@@ -209,12 +213,31 @@ python -m quant.seed_metric_config
 ```
 
 #### Scenario: Seeding a fresh database
+
 - **WHEN** the seeder script is executed against a database with an empty `metric_config` table
 - **THEN** the table SHALL contain exactly 17 rows, one for each metric, with the threshold values specified above
 
-#### Scenario: Seeding is idempotent
-- **WHEN** the seeder script is executed twice consecutively
-- **THEN** the table SHALL still contain exactly 17 rows with identical values (no duplicates, no errors)
+#### Scenario: Seeding is idempotent and preserves user changes
+
+- **WHEN** the user has modified thresholds for `mvrv_z` to custom values `{t_plus_2: 0.2, t_plus_1: 0.25, t_minus_1: 5.0, t_minus_2: 7.0}`
+- **AND** the seeder script is executed
+- **THEN** the `mvrv_z` row SHALL retain the user's custom values `{t_plus_2: 0.2, t_plus_1: 0.25, t_minus_1: 5.0, t_minus_2: 7.0}`
+- **THEN** the row SHALL NOT be overwritten with the seed defaults
+
+#### Scenario: New metric is seeded alongside existing customized metrics
+
+- **WHEN** the `metric_config` table contains 16 rows (with some user-customized values)
+- **AND** a new 17th metric is added to the SEED_DATA constant
+- **AND** the seeder script is executed
+- **THEN** only the new 17th metric SHALL be inserted
+- **THEN** the existing 16 rows (including user-customized ones) SHALL be unchanged
+
+#### Scenario: Backend startup does not overwrite user thresholds
+
+- **WHEN** the user has saved custom thresholds for `terminal_price_ratio` via `POST /api/metrics/config`
+- **AND** the Hono backend server is restarted
+- **THEN** the `terminal_price_ratio` row in `metric_config` SHALL retain the user's custom values
+- **THEN** the seed logic SHALL NOT replace the custom values with defaults
 
 #### Scenario: Verifying CVDD bottom-only seed data
 - **WHEN** the row for `cvdd_ratio` is queried after seeding

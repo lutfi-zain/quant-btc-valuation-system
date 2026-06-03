@@ -130,6 +130,23 @@ export const DashboardLayout: React.FC = () => {
     }
   };
 
+  const handleRefreshDashboardData = async () => {
+    if (activeMetric) {
+      setDetailLoading(true);
+      try {
+        const [data] = await Promise.all([
+          fetchMetricData(activeMetric),
+          loadDashboardData()
+        ]);
+        setDetailData(data);
+      } catch (err) {
+        console.error(`Error refreshing detail data:`, err);
+      } finally {
+        setDetailLoading(false);
+      }
+    }
+  };
+
   const handleCloseDetail = () => {
     setActiveMetric(null);
     setDetailData([]);
@@ -211,7 +228,7 @@ export const DashboardLayout: React.FC = () => {
             <span className="navbar-datetime">SYSTEM_TIME: {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </header>
-
+ 
         <div className="dashboard-body">
           {activeMetric === '__audit__' ? (
             <AuditPanel />
@@ -219,7 +236,7 @@ export const DashboardLayout: React.FC = () => {
             <>
               {/* 1. Composite Master Chart */}
               <CompositeChart data={compositeData} />
-
+ 
               {/* 2. Expanded Detail Panel */}
               {activeMetric && activeMetric !== '__audit__' && activeSummary && (
                 <MetricDetail
@@ -230,6 +247,7 @@ export const DashboardLayout: React.FC = () => {
                   loading={detailLoading}
                   onClose={handleCloseDetail}
                   onRefetchMetric={handleRefetchMetric}
+                  onRefreshDashboardData={handleRefreshDashboardData}
                   refetching={refetching}
                 />
               )}
