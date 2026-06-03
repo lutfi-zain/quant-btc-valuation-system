@@ -999,3 +999,42 @@
   margin: 0;
 }
 
+/* Maximized Composite Chart Card Styling */
+.composite-chart-card.maximized {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  background-color: var(--bg-base);
+  border: none;
+  border-radius: 0;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.composite-chart-card.maximized .card-header {
+  margin-bottom: 2rem;
+}
+
+.composite-chart-card.maximized .chart-wrapper.sub-panels {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px !important;
+  height: calc(100% - 100px);
+}
+
+.composite-chart-card.maximized .panel.btc-panel {
+  flex: 3 !important;
+  height: auto !important;
+}
+
+.composite-chart-card.maximized .panel.oscillator-panel {
+  flex: 2 !important;
+  height: auto !important;
+}
+

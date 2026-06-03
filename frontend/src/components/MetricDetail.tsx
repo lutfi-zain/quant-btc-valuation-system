@@ -67,7 +67,8 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
       rightPriceScale: { 
         borderColor: '#1e293b', 
         scaleMargins: { top: 0.1, bottom: 0.1 },
-        mode: isLogScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal
+        mode: isLogScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+        minimumWidth: 90,
       },
       timeScale: { borderColor: '#1e293b', visible: false },
       width: btcContainerRef.current.clientWidth || 600,
@@ -90,7 +91,11 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
       layout: { background: { color: 'transparent' }, textColor: '#888888' },
       grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
       crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
-      rightPriceScale: { borderColor: '#1e293b', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { 
+        borderColor: '#1e293b', 
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        minimumWidth: 90,
+      },
       timeScale: { borderColor: '#1e293b', visible: false },
       width: rawContainerRef.current.clientWidth || 600,
       height: 180,
@@ -130,7 +135,11 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
       layout: { background: { color: 'transparent' }, textColor: '#888888' },
       grid: { vertLines: { color: '#1e293b', style: 1 }, horzLines: { color: '#1e293b', style: 1 } },
       crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
-      rightPriceScale: { borderColor: '#1e293b', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { 
+        borderColor: '#1e293b', 
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        minimumWidth: 90,
+      },
       timeScale: { borderColor: '#1e293b', visible: true, timeVisible: false },
       width: oscContainerRef.current.clientWidth || 600,
       height: 150,
@@ -146,11 +155,11 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
     });
 
     // Reference lines for oscillator
-    oscSeries.createPriceLine({ price: 2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bubble (+2)' });
-    oscSeries.createPriceLine({ price: 1.0, color: '#fb7185', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: 2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Undervalued (+2)' });
+    oscSeries.createPriceLine({ price: 1.0, color: '#34d399', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
     oscSeries.createPriceLine({ price: 0, color: '#475569', lineWidth: 1, lineStyle: 2 });
-    oscSeries.createPriceLine({ price: -1.0, color: '#34d399', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
-    oscSeries.createPriceLine({ price: -2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Undervalued (-2)' });
+    oscSeries.createPriceLine({ price: -1.0, color: '#fb7185', lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+    oscSeries.createPriceLine({ price: -2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bubble (-2)' });
 
     chartOscRef.current = chartOsc;
     oscSeriesRef.current = oscSeries;

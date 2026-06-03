@@ -27,42 +27,83 @@ export interface ThresholdConfig {
 }
 
 const DEFAULT_THRESHOLDS: ThresholdConfig = {
-  t_minus_2: -2.0,
-  t_minus_1: -1.0,
+  t_minus_2: 2.0,
+  t_minus_1: 1.0,
   t_zero: 0.0,
-  t_plus_1: 1.0,
-  t_plus_2: 2.0
+  t_plus_1: -1.0,
+  t_plus_2: -2.0
 };
 
-function mapToOscillator(raw: number, t: ThresholdConfig): number {
-  const m2 = Number(t.t_minus_2) || 0;
-  const m1 = Number(t.t_minus_1) || 0;
-  const z = Number(t.t_zero) || 0;
-  const p1 = Number(t.t_plus_1) || 0;
-  const p2 = Number(t.t_plus_2) || 0;
+function mapToOscillator(rawValue: number, t: ThresholdConfig): number {
+  const t_minus_2 = t.t_minus_2 !== null && t.t_minus_2 !== '' ? Number(t.t_minus_2) : null;
+  const t_minus_1 = t.t_minus_1 !== null && t.t_minus_1 !== '' ? Number(t.t_minus_1) : null;
+  const t_plus_1 = t.t_plus_1 !== null && t.t_plus_1 !== '' ? Number(t.t_plus_1) : null;
+  const t_plus_2 = t.t_plus_2 !== null && t.t_plus_2 !== '' ? Number(t.t_plus_2) : null;
 
-  if (raw <= m2) {
-    const diff = m1 - m2;
-    return 2 + (diff ? (m2 - raw) / diff : 0);
+  if (rawValue === null || isNaN(rawValue)) return NaN;
+  if (t_plus_2 === null && t_plus_1 === null && t_minus_1 === null && t_minus_2 === null) return 0.0;
+
+  // Auto-detect direction
+  let inverted = false;
+  if (t_plus_2 !== null && t_minus_2 !== null) {
+    inverted = t_plus_2 > t_minus_2;
+  } else if (t_plus_2 !== null && t_plus_1 !== null) {
+    inverted = t_plus_2 > t_plus_1;
+  } else if (t_minus_1 !== null && t_minus_2 !== null) {
+    inverted = t_minus_1 > t_minus_2;
   }
-  if (raw <= m1) {
-    const diff = m1 - m2;
-    return 2 - (raw - m2) / diff;
+
+  const is_bottom_only = t_minus_1 === null && t_minus_2 === null;
+  const is_top_only = t_plus_1 === null && t_plus_2 === null;
+
+  const safe_div = (num: number, denom: number) => Math.abs(denom) > 1e-9 ? num / denom : 0.0;
+
+  if (is_bottom_only) {
+    if (t_plus_2 === null || t_plus_1 === null) return 0.0;
+    if (!inverted) {
+      if (rawValue <= t_plus_2) return 2.0;
+      if (rawValue >= t_plus_1) return 0.0;
+      return 2.0 - safe_div(rawValue - t_plus_2, t_plus_1 - t_plus_2);
+    } else {
+      if (rawValue >= t_plus_2) return 2.0;
+      if (rawValue <= t_plus_1) return 0.0;
+      return 1.0 + safe_div(rawValue - t_plus_1, t_plus_2 - t_plus_1);
+    }
+  } else if (is_top_only) {
+    if (t_minus_1 === null || t_minus_2 === null) return 0.0;
+    if (!inverted) {
+      if (rawValue >= t_minus_2) return -2.0;
+      if (rawValue <= t_minus_1) return 0.0;
+      return -1.0 - safe_div(rawValue - t_minus_1, t_minus_2 - t_minus_1);
+    } else {
+      if (rawValue <= t_minus_2) return -2.0;
+      if (rawValue >= t_minus_1) return 0.0;
+      return -2.0 + safe_div(rawValue - t_minus_2, t_minus_1 - t_minus_2);
+    }
+  } else {
+    if (t_plus_2 === null || t_plus_1 === null || t_minus_1 === null || t_minus_2 === null) return 0.0;
+    if (!inverted) {
+      if (rawValue <= t_plus_2) return 2.0;
+      if (rawValue >= t_minus_2) return -2.0;
+      if (t_plus_2 <= rawValue && rawValue < t_plus_1) {
+        return 2.0 - safe_div(rawValue - t_plus_2, t_plus_1 - t_plus_2);
+      }
+      if (t_plus_1 <= rawValue && rawValue < t_minus_1) {
+        return 1.0 - 2.0 * safe_div(rawValue - t_plus_1, t_minus_1 - t_plus_1);
+      }
+      return -1.0 - safe_div(rawValue - t_minus_1, t_minus_2 - t_minus_1);
+    } else {
+      if (rawValue >= t_plus_2) return 2.0;
+      if (rawValue <= t_minus_2) return -2.0;
+      if (t_plus_1 < rawValue && rawValue <= t_plus_2) {
+        return 1.0 + safe_div(rawValue - t_plus_1, t_plus_2 - t_plus_1);
+      }
+      if (t_minus_1 < rawValue && rawValue <= t_plus_1) {
+        return -1.0 + 2.0 * safe_div(rawValue - t_minus_1, t_plus_1 - t_minus_1);
+      }
+      return -2.0 + safe_div(rawValue - t_minus_2, t_minus_1 - t_minus_2);
+    }
   }
-  if (raw <= z) {
-    const diff = z - m1;
-    return 1 - (raw - m1) / diff;
-  }
-  if (raw <= p1) {
-    const diff = p1 - z;
-    return 0 - (raw - z) / diff;
-  }
-  if (raw <= p2) {
-    const diff = p2 - p1;
-    return -1 - (raw - p1) / diff;
-  }
-  const diff = p2 - p1;
-  return -2 - (raw - p2) / diff;
 }
 
 export const AvivRatioChart = () => {
@@ -155,7 +196,8 @@ export const AvivRatioChart = () => {
         rightPriceScale: { 
           borderColor: '#222222', 
           scaleMargins: { top: 0.1, bottom: 0.1 },
-          mode: PriceScaleMode.Logarithmic
+          mode: PriceScaleMode.Logarithmic,
+          minimumWidth: 90,
         },
         timeScale: { borderColor: '#222222', visible: false },
         width: btcContainerRef.current.clientWidth || 600,
@@ -178,7 +220,11 @@ export const AvivRatioChart = () => {
         layout: { background: { color: 'transparent' }, textColor: '#888888' },
         grid: { vertLines: { color: '#222222', style: 1 }, horzLines: { color: '#222222', style: 1 } },
         crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
-        rightPriceScale: { borderColor: '#222222', scaleMargins: { top: 0.1, bottom: 0.1 } },
+        rightPriceScale: { 
+          borderColor: '#222222', 
+          scaleMargins: { top: 0.1, bottom: 0.1 },
+          minimumWidth: 90,
+        },
         timeScale: { borderColor: '#222222', visible: false },
         width: chartContainerRef.current.clientWidth || 600,
         height: 300,
@@ -199,7 +245,11 @@ export const AvivRatioChart = () => {
         layout: { background: { color: 'transparent' }, textColor: '#888888' },
         grid: { vertLines: { color: '#222222', style: 1 }, horzLines: { color: '#222222', style: 1 } },
         crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#555555' }, horzLine: { color: '#555555' } },
-        rightPriceScale: { borderColor: '#222222', scaleMargins: { top: 0.1, bottom: 0.1 } },
+        rightPriceScale: { 
+          borderColor: '#222222', 
+          scaleMargins: { top: 0.1, bottom: 0.1 },
+          minimumWidth: 90,
+        },
         timeScale: { borderColor: '#222222', visible: true, timeVisible: false },
         width: oscContainerRef.current.clientWidth || 600,
         height: 250,
@@ -213,8 +263,8 @@ export const AvivRatioChart = () => {
       });
 
       // Reference lines for oscillator (-2 and +2)
-      oscSeries.createPriceLine({ price: 2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Peak' });
-      oscSeries.createPriceLine({ price: -2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bottom' });
+      oscSeries.createPriceLine({ price: 2.0, color: '#10b981', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Bottom' });
+      oscSeries.createPriceLine({ price: -2.0, color: '#f43f5e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Peak' });
       oscSeries.createPriceLine({ price: 0, color: '#555555', lineWidth: 1, lineStyle: 2 });
 
       chart2Ref.current = chart2;
