@@ -4,6 +4,16 @@ from quant.components.bitview_client import fetch_series
 from quant.components.normalization import normalize_metric
 
 class AvivNuplComponent(BaseComponent):
+    """
+    AVIV (Active-Value-to-Investor-Value) Net Unrealized Profit/Loss (NUPL) Component.
+
+    Mathematical formula:
+    AVIV NUPL = (price - true_market_mean) / price
+
+    By calculating in price terms using True Market Mean (TMM) rather than
+    capitalization series, we avoid scaling issues and align perfectly
+    with checkonchain.com reference charts.
+    """
     METRIC_NAME = "aviv_nupl"
     DESCRIPTION = "AVIV NUPL"
     CATEGORY = "fundamental"

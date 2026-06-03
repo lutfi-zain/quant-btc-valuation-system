@@ -72,24 +72,37 @@ def test_db(tmp_path):
 def test_aviv_ratio_component(mock_fetch, test_db):
     comp = AvivRatioComponent(db_path=test_db)
     
-    # Mock true_market_mean and price data
+    # Mock multiple rows to allow mean and std dev calculation
+    # ratios = [1.0, 2.0, 3.0]. mean = 2.0, std = 1.0. 
+    # For date 2025-06-03: ratio = 3.0 -> Z-score = (3.0 - 2.0)/1.0 = 1.0
     mock_fetch.side_effect = [
-        pd.DataFrame([{"date": "2025-06-01", "value": 20000.0}]), # true_market_mean
-        pd.DataFrame([{"date": "2025-06-01", "value": 40000.0}])  # price
+        pd.DataFrame([
+            {"date": "2025-06-01T00:00:00Z", "value": 20000.0},
+            {"date": "2025-06-02T00:00:00Z", "value": 20000.0},
+            {"date": "2025-06-03T00:00:00Z", "value": 20000.0}
+        ]), # true_market_mean
+        pd.DataFrame([
+            {"date": "2025-06-01T00:00:00Z", "value": 20000.0}, # ratio = 1.0
+            {"date": "2025-06-02T00:00:00Z", "value": 40000.0}, # ratio = 2.0
+            {"date": "2025-06-03T00:00:00Z", "value": 60000.0}  # ratio = 3.0
+        ])  # price
     ]
     
     res = comp.run_pipeline(full_rebuild=True)
     assert res["status"] == "success"
-    assert res["rows_stored"] == 1
+    assert res["rows_stored"] == 3
     
-    # Verify values in DB: raw_value should be 40000/20000 = 2.0
     conn = sqlite3.connect(test_db)
-    row = conn.execute("SELECT raw_value, normalized_value FROM timeseries_metrics WHERE metric_name = 'aviv_ratio'").fetchone()
+    rows = conn.execute("SELECT date, raw_value, normalized_value FROM timeseries_metrics WHERE metric_name = 'aviv_ratio' ORDER BY date ASC").fetchall()
     conn.close()
     
-    assert row[0] == pytest.approx(2.0)
-    # Thresholds: -2, -1, 1, 2. raw=2.0 maps to t_minus_2, yielding -2.0
-    assert row[1] == pytest.approx(-2.0)
+    # Verify row 0: Z-score = -1.0 -> maps to t_plus_1 (-1.0) -> yielding 1.0
+    assert rows[0][1] == pytest.approx(-1.0)
+    assert rows[0][2] == pytest.approx(1.0)
+    
+    # Verify row 2: Z-Score = 1.0 -> maps to t_minus_1 (1.0) -> yielding -1.0
+    assert rows[2][1] == pytest.approx(1.0)
+    assert rows[2][2] == pytest.approx(-1.0)
 
 @patch('quant.components.aviv_nupl.fetch_series')
 def test_aviv_nupl_component(mock_fetch, test_db):
