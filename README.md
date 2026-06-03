@@ -25,6 +25,19 @@ By using piecewise linear interpolation against historical standard-deviation (S
 
 ---
 
+## 📸 Screenshots
+
+### Master Composite Dashboard
+![Master Composite Dashboard](docs/dashboard.png)
+
+### Metrics Grid View
+![Metrics Grid View](docs/metrics-grid.png)
+
+### Custom Threshold per Metric Configuration
+![Custom Threshold per Metric Configuration](docs/custom-threshold-per-metrics.png)
+
+---
+
 ## 💻 Technology Stack
 
 * **Quant Core (Statistical Engine):** [Python 3.10+](https://www.python.org/) utilizing `Pandas`, `NumPy`, and `Requests` for historical data scraping, mathematical model execution, and ingestion.
