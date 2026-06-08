@@ -36,20 +36,12 @@ trap cleanup SIGINT SIGTERM EXIT
 
 # Start backend
 cd "$DIR/backend"
-if command -v bun &> /dev/null; then
-  bun index.ts &
-else
-  npm run start:node &
-fi
+npm run start &
 BACKEND_PID=$!
 
 # Start frontend
 cd "$DIR/frontend"
-if command -v bun &> /dev/null; then
-  bun run dev &
-else
-  npm run dev &
-fi
+npm run dev &
 FRONTEND_PID=$!
 
 # Keep script running

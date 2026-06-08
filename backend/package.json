@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch index.ts",
-    "start": "bun run index.ts",
+    "dev": "node runner.js dev",
+    "start": "node runner.js start",
     "dev:node": "tsx watch src/index.node.ts",
     "start:node": "tsx src/index.node.ts"
   },
