@@ -92,10 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ metrics, activeMetric, onSelec
                         >
                           <span className="metric-nav-name">{metric.name.toUpperCase()}</span>
                           <span className={`metric-nav-badge ${
-                            metric.normalized_value >= 1.0 ? 'badge-undervalued' : 
-                            metric.normalized_value <= -1.0 ? 'badge-overvalued' : 'badge-neutral'
+                            metric.normalized_value !== null && metric.normalized_value !== undefined ? (
+                              metric.normalized_value >= 1.0 ? 'badge-undervalued' : 
+                              metric.normalized_value <= -1.0 ? 'badge-overvalued' : 'badge-neutral'
+                            ) : 'badge-neutral'
                           }`}>
-                            {metric.normalized_value.toFixed(2)}
+                            {metric.normalized_value !== null && metric.normalized_value !== undefined ? metric.normalized_value.toFixed(2) : 'N/A'}
                           </span>
                         </button>
                       </li>

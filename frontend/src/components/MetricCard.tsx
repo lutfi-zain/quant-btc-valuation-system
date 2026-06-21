@@ -48,7 +48,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           className="metric-badge"
           style={{ backgroundColor: normColor, color: '#0f172a' }}
         >
-          {metric.normalized_value.toFixed(2)}
+          {metric.normalized_value !== null && metric.normalized_value !== undefined ? metric.normalized_value.toFixed(2) : 'N/A'}
         </div>
       </div>
 
@@ -60,7 +60,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         <div className="value-item text-right">
           <span className="value-label">REGIME_STATE</span>
           <span className="value-state" style={{ color: normColor }}>
-            {getInterpretationText(metric.normalized_value)}
+            {metric.normalized_value !== null && metric.normalized_value !== undefined ? getInterpretationText(metric.normalized_value) : 'N/A'}
           </span>
         </div>
       </div>

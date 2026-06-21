@@ -346,7 +346,7 @@ export const MetricDetail: React.FC<MetricDetailProps> = ({
           </button>
           <div className="detail-latest-badge" style={{ borderColor: color, display: 'flex', alignItems: 'center', gap: '0.5rem', borderWidth: '1px', borderStyle: 'solid', padding: '0.25rem 0.75rem', borderRadius: '2px', fontFamily: 'monospace' }}>
             <span className="badge-lbl" style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>SCORE</span>
-            <span className="badge-val" style={{ color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>{metric.normalized_value.toFixed(2)}</span>
+            <span className="badge-val" style={{ color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>{metric.normalized_value !== null && metric.normalized_value !== undefined ? metric.normalized_value.toFixed(2) : 'N/A'}</span>
           </div>
           <button onClick={onClose} className="btn-close-detail">× CLOSE</button>
         </div>
